@@ -3,7 +3,6 @@ import os
 import re
 import sqlite3
 from html import escape
-from urllib.parse import urlparse
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -102,7 +101,10 @@ def is_admin(update):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[InlineKeyboardButton("🎵 راهنما", callback_data="help")], [InlineKeyboardButton("ℹ️ درباره ربات", callback_data="about")]]
+    keyboard = [
+        [InlineKeyboardButton("🎵 راهنما", callback_data="help")],
+        [InlineKeyboardButton("ℹ️ درباره ربات", callback_data="about")],
+    ]
     await update.message.reply_text(
         "🌳 <b>Cercis Garden</b>\n\nبرای دریافت اطلاعات یک موسیقی، لینک پست آن را ارسال کنید.",
         parse_mode="HTML",
@@ -123,13 +125,53 @@ async def lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(format_track(row), parse_mode="HTML", disable_web_page_preview=True)
 
 
+async def forwarded_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Look up a track by the original channel post of a forwarded message."""
+    message = update.message
+    origin = message.forward_origin if message else None
+
+    if origin is None or getattr(origin, "type", None) != "channel":
+        await message.reply_text(
+            "❌ نتوانستم پست اصلی را شناسایی کنم.\n\n"
+            "لطفاً موزیک را مستقیماً از کانال با گزینهٔ Forward برای ربات بفرستید."
+        )
+        return
+
+    channel_chat = origin.chat
+    post_id = origin.message_id
+    channel = getattr(channel_chat, "username", None)
+
+    if channel:
+        row = get_track(channel, post_id)
+    else:
+        row = None
+
+    if not row:
+        await message.reply_text(
+            "❌ این پست هنوز در Cercis Garden ثبت نشده است.\n\n"
+            "از لینک همان پست برای ثبت آن در پنل مدیریت استفاده کنید."
+        )
+        return
+
+    await message.reply_text(
+        format_track(row),
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+
+
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     if q.data == "help":
-        await q.edit_message_text("🔗 لینک پست موسیقی را همین‌جا ارسال کنید تا اطلاعات ثبت‌شده آن را پیدا کنم.")
+        await q.edit_message_text(
+            "🔗 لینک پست موسیقی را همین‌جا ارسال کنید تا اطلاعات ثبت‌شده آن را پیدا کنم.\n\n"
+            "همچنین می‌توانید خود پست یا فایل موسیقی را مستقیماً از کانال برای ربات Forward کنید."
+        )
     elif q.data == "about":
-        await q.edit_message_text("🌳 Cercis Garden\nکتابخانه‌ای از اطلاعات موسیقی‌های ثبت‌شده توسط مدیریت.")
+        await q.edit_message_text(
+            "🌳 Cercis Garden\nکتابخانه‌ای از اطلاعات موسیقی‌های ثبت‌شده توسط مدیریت."
+        )
 
 
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -138,10 +180,17 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     keyboard = [
         [InlineKeyboardButton("➕ افزودن پست", callback_data="add")],
-        [InlineKeyboardButton("✏️ ویرایش اطلاعات", callback_data="edit"), InlineKeyboardButton("🗑 حذف پست", callback_data="delete")],
+        [
+            InlineKeyboardButton("✏️ ویرایش اطلاعات", callback_data="edit"),
+            InlineKeyboardButton("🗑 حذف پست", callback_data="delete"),
+        ],
         [InlineKeyboardButton("📊 آمار", callback_data="stats")],
     ]
-    await update.message.reply_text("👑 <b>پنل مدیریت Cercis Garden</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text(
+        "👑 <b>پنل مدیریت Cercis Garden</b>",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
 
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -162,7 +211,10 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn = db()
         count = conn.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
         conn.close()
-        await q.message.reply_text(f"📊 تعداد موسیقی‌های ثبت‌شده: <b>{count}</b>", parse_mode="HTML")
+        await q.message.reply_text(
+            f"📊 تعداد موسیقی‌های ثبت‌شده: <b>{count}</b>",
+            parse_mode="HTML",
+        )
     return ConversationHandler.END
 
 
@@ -171,7 +223,11 @@ async def add_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not parsed:
         await update.message.reply_text("❌ لینک معتبر نیست. دوباره ارسال کنید.")
         return ADD_LINK
-    context.user_data["add"] = {"channel": parsed[0], "post_id": parsed[1], "url": update.message.text.strip()}
+    context.user_data["add"] = {
+        "channel": parsed[0],
+        "post_id": parsed[1],
+        "url": update.message.text.strip(),
+    }
     await update.message.reply_text("🎵 نام موسیقی را وارد کنید:")
     return ADD_TITLE
 
@@ -223,7 +279,9 @@ async def delete_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cur = conn.execute("DELETE FROM tracks WHERE channel=? AND post_id=?", parsed)
     conn.commit()
     conn.close()
-    await update.message.reply_text("✅ اطلاعات حذف شد." if cur.rowcount else "❌ اطلاعاتی برای این پست پیدا نشد.")
+    await update.message.reply_text(
+        "✅ اطلاعات حذف شد." if cur.rowcount else "❌ اطلاعاتی برای این پست پیدا نشد."
+    )
     return ConversationHandler.END
 
 
@@ -251,6 +309,9 @@ def build_app():
         allow_reentry=True,
     )
     app.add_handler(admin_conv)
+
+    # Forwarded posts are checked before ordinary text handling.
+    app.add_handler(MessageHandler(filters.FORWARDED, forwarded_lookup))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, lookup))
     return app
 
