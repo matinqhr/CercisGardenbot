@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import sqlite3
+
 from html import escape
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -20,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
-DB_PATH = os.environ.get("DB_PATH", "cercis.db")
+# Netrun keeps /data across code updates and restarts. A custom DB_PATH can still be used.
+DB_PATH = os.environ.get("DB_PATH", "/data/cercis.db")
 
 ADD_LINK, ADD_TITLE, ADD_ARTIST, ADD_ALBUM, ADD_YEAR, ADD_DESCRIPTION = range(6)
 EDIT_LINK, EDIT_FIELD, EDIT_VALUE = range(6, 9)
@@ -28,6 +30,7 @@ DELETE_LINK = 9
 
 
 def db():
+    os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute(
@@ -310,7 +313,6 @@ def build_app():
     )
     app.add_handler(admin_conv)
 
-    # Forwarded posts are checked before ordinary text handling.
     app.add_handler(MessageHandler(filters.FORWARDED, forwarded_lookup))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, lookup))
     return app
