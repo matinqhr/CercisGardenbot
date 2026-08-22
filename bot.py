@@ -24,9 +24,16 @@ ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 # Netrun keeps /data across code updates and restarts. A custom DB_PATH can still be used.
 DB_PATH = os.environ.get("DB_PATH", "/data/cercis.db")
 
-ADD_LINK, ADD_TITLE, ADD_ARTIST, ADD_ALBUM, ADD_YEAR, ADD_DESCRIPTION = range(6)
-EDIT_LINK, EDIT_FIELD, EDIT_VALUE = range(6, 9)
-DELETE_LINK = 9
+ADD_LINK, ADD_FORM = range(2)
+DELETE_LINK = 2
+
+FORM_TEMPLATE = (
+    "🎵 **نام موزیک**\n"
+    "🎹 **خواننده**\n"
+    "📅 **تاریخ انتشار**\n"
+    "✏️ **متن آهنگ**\n"
+    "📝 **توضیحات**"
+)
 
 
 def db():
@@ -43,10 +50,23 @@ def db():
             artist TEXT,
             album TEXT,
             year TEXT,
+            release_date TEXT,
+            lyrics TEXT,
             description TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )"""
     )
+
+    # Migrate databases created by earlier versions without deleting existing data.
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(tracks)").fetchall()}
+    migrations = {
+        "release_date": "ALTER TABLE tracks ADD COLUMN release_date TEXT",
+        "lyrics": "ALTER TABLE tracks ADD COLUMN lyrics TEXT",
+    }
+    for column, statement in migrations.items():
+        if column not in columns:
+            conn.execute(statement)
+
     conn.commit()
     return conn
 
@@ -69,15 +89,16 @@ def get_track(channel, post_id):
     return row
 
 
-def save_track(channel, post_id, url, title, artist, album, year, description):
+def save_track(channel, post_id, url, title, artist, release_date, lyrics, description):
     conn = db()
     conn.execute(
-        """INSERT INTO tracks(channel, post_id, url, title, artist, album, year, description)
+        """INSERT INTO tracks(channel, post_id, url, title, artist, release_date, lyrics, description)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(url) DO UPDATE SET
-             title=excluded.title, artist=excluded.artist, album=excluded.album,
-             year=excluded.year, description=excluded.description""",
-        (channel, post_id, url, title, artist, album, year, description),
+             title=excluded.title, artist=excluded.artist,
+             release_date=excluded.release_date, lyrics=excluded.lyrics,
+             description=excluded.description""",
+        (channel, post_id, url, title, artist, release_date, lyrics, description),
     )
     conn.commit()
     conn.close()
@@ -89,10 +110,11 @@ def format_track(row):
         parts.append(f"🎵 <b>{escape(row['title'])}</b>")
     if row["artist"]:
         parts.append(f"🎹 <b>{escape(row['artist'])}</b>")
-    if row["album"]:
-        parts.append(f"💿 {escape(row['album'])}")
-    if row["year"]:
-        parts.append(f"📅 {escape(row['year'])}")
+    release_date = row["release_date"] or row["year"]
+    if release_date:
+        parts.append(f"📅 {escape(release_date)}")
+    if row["lyrics"]:
+        parts.append(f"\n✏️ <b>متن آهنگ</b>\n{escape(row['lyrics'])}")
     if row["description"]:
         parts.append(f"\n📝 <b>توضیحات</b>\n{escape(row['description'])}")
     parts.append(f"\n🔗 <a href=\"{escape(row['url'])}\">مشاهده پست اصلی</a>")
@@ -101,6 +123,37 @@ def format_track(row):
 
 def is_admin(update):
     return bool(ADMIN_ID and update.effective_user and update.effective_user.id == ADMIN_ID)
+
+
+def parse_info_form(text):
+    """Parse the admin's single structured message into the five requested fields."""
+    patterns = {
+        "title": r"(?:🎵\s*)?(?:\*\*\s*)?نام\s+موزیک(?:\s*\*\*)?\s*[:：]\s*([\s\S]*?)(?=\n\s*🎹|\n\s*📅|\n\s*✏️|\n\s*📝|$)",
+        "artist": r"(?:🎹\s*)?(?:\*\*\s*)?خواننده(?:\s*\*\*)?\s*[:：]\s*([\s\S]*?)(?=\n\s*🎵|\n\s*📅|\n\s*✏️|\n\s*📝|$)",
+        "release_date": r"(?:📅\s*)?(?:\*\*\s*)?تاریخ\s+انتشار(?:\s*\*\*)?\s*[:：]\s*([\s\S]*?)(?=\n\s*🎵|\n\s*🎹|\n\s*✏️|\n\s*📝|$)",
+        "lyrics": r"(?:✏️\s*)?(?:\*\*\s*)?متن\s+آهنگ(?:\s*\*\*)?\s*[:：]\s*([\s\S]*?)(?=\n\s*🎵|\n\s*🎹|\n\s*📅|\n\s*📝|$)",
+        "description": r"(?:📝\s*)?(?:\*\*\s*)?توضیحات(?:\s*\*\*)?\s*[:：]\s*([\s\S]*?)\s*$",
+    }
+
+    result = {}
+    for key, pattern in patterns.items():
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        result[key] = match.group(1).strip() if match else ""
+
+    missing = [
+        label
+        for key, label in [
+            ("title", "🎵 نام موزیک"),
+            ("artist", "🎹 خواننده"),
+            ("release_date", "📅 تاریخ انتشار"),
+            ("lyrics", "✏️ متن آهنگ"),
+            ("description", "📝 توضیحات"),
+        ]
+        if not result[key]
+    ]
+    if missing:
+        return None, missing
+    return result, []
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -144,11 +197,7 @@ async def forwarded_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     post_id = origin.message_id
     channel = getattr(channel_chat, "username", None)
 
-    if channel:
-        row = get_track(channel, post_id)
-    else:
-        row = None
-
+    row = get_track(channel, post_id) if channel else None
     if not row:
         await message.reply_text(
             "❌ این پست هنوز در Cercis Garden ثبت نشده است.\n\n"
@@ -156,11 +205,7 @@ async def forwarded_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    await message.reply_text(
-        format_track(row),
-        parse_mode="HTML",
-        disable_web_page_preview=True,
-    )
+    await message.reply_text(format_track(row), parse_mode="HTML", disable_web_page_preview=True)
 
 
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -183,10 +228,7 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     keyboard = [
         [InlineKeyboardButton("➕ افزودن پست", callback_data="add")],
-        [
-            InlineKeyboardButton("✏️ ویرایش اطلاعات", callback_data="edit"),
-            InlineKeyboardButton("🗑 حذف پست", callback_data="delete"),
-        ],
+        [InlineKeyboardButton("🗑 حذف پست", callback_data="delete")],
         [InlineKeyboardButton("📊 آمار", callback_data="stats")],
     ]
     await update.message.reply_text(
@@ -200,13 +242,15 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     if not is_admin(update):
-        return
+        return ConversationHandler.END
     if q.data == "add":
-        await q.message.reply_text("🔗 لینک پست را ارسال کنید.")
+        await q.message.reply_text(
+            "🔗 اول لینک پست را ارسال کنید.\n\n"
+            "بعد، اطلاعات موسیقی را <b>در یک پیام واحد</b> دقیقاً در این قالب بفرستید:\n\n"
+            f"<code>{escape(FORM_TEMPLATE)}</code>",
+            parse_mode="HTML",
+        )
         return ADD_LINK
-    if q.data == "edit":
-        await q.message.reply_text("🔗 لینک پستی که می‌خواهید ویرایش کنید را ارسال کنید.")
-        return EDIT_LINK
     if q.data == "delete":
         await q.message.reply_text("🔗 لینک پستی که می‌خواهید حذف کنید را ارسال کنید.")
         return DELETE_LINK
@@ -214,10 +258,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn = db()
         count = conn.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
         conn.close()
-        await q.message.reply_text(
-            f"📊 تعداد موسیقی‌های ثبت‌شده: <b>{count}</b>",
-            parse_mode="HTML",
-        )
+        await q.message.reply_text(f"📊 تعداد موسیقی‌های ثبت‌شده: <b>{count}</b>", parse_mode="HTML")
     return ConversationHandler.END
 
 
@@ -231,38 +272,35 @@ async def add_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "post_id": parsed[1],
         "url": update.message.text.strip(),
     }
-    await update.message.reply_text("🎵 نام موسیقی را وارد کنید:")
-    return ADD_TITLE
+    await update.message.reply_text(
+        "📝 حالا همه اطلاعات را در <b>یک پیام واحد</b> و دقیقاً با این قالب ارسال کنید:\n\n"
+        f"<code>{escape(FORM_TEMPLATE)}</code>",
+        parse_mode="HTML",
+    )
+    return ADD_FORM
 
 
-async def add_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["add"]["title"] = update.message.text
-    await update.message.reply_text("🎹 نام آهنگساز / هنرمند را وارد کنید (یا -):")
-    return ADD_ARTIST
+async def add_form(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    result, missing = parse_info_form(update.message.text or "")
+    if not result:
+        await update.message.reply_text(
+            "❌ قالب کامل نیست. این بخش‌ها پیدا نشد:\n"
+            + "\n".join(f"• {item}" for item in missing)
+            + "\n\nدوباره همه اطلاعات را در یک پیام و با همان قالب ارسال کنید."
+        )
+        return ADD_FORM
 
-
-async def add_artist(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["add"]["artist"] = "" if update.message.text.strip() == "-" else update.message.text
-    await update.message.reply_text("💿 نام آلبوم را وارد کنید (یا -):")
-    return ADD_ALBUM
-
-
-async def add_album(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["add"]["album"] = "" if update.message.text.strip() == "-" else update.message.text
-    await update.message.reply_text("📅 سال انتشار را وارد کنید (یا -):")
-    return ADD_YEAR
-
-
-async def add_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["add"]["year"] = "" if update.message.text.strip() == "-" else update.message.text
-    await update.message.reply_text("📝 توضیحات را وارد کنید (یا -):")
-    return ADD_DESCRIPTION
-
-
-async def add_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = context.user_data.pop("add")
-    data["description"] = "" if update.message.text.strip() == "-" else update.message.text
-    save_track(**data)
+    save_track(
+        channel=data["channel"],
+        post_id=data["post_id"],
+        url=data["url"],
+        title=result["title"],
+        artist=result["artist"],
+        release_date=result["release_date"],
+        lyrics=result["lyrics"],
+        description=result["description"],
+    )
     await update.message.reply_text("✅ اطلاعات پست با موفقیت ذخیره شد.")
     return ConversationHandler.END
 
@@ -298,14 +336,10 @@ def build_app():
     app.add_handler(CallbackQueryHandler(menu_callback, pattern="^(help|about)$"))
 
     admin_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(admin_panel, pattern="^(add|edit|delete|stats)$")],
+        entry_points=[CallbackQueryHandler(admin_panel, pattern="^(add|delete|stats)$")],
         states={
             ADD_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_link)],
-            ADD_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_title)],
-            ADD_ARTIST: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_artist)],
-            ADD_ALBUM: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_album)],
-            ADD_YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_year)],
-            ADD_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_description)],
+            ADD_FORM: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_form)],
             DELETE_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_link)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
