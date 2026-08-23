@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 
 TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
-# Netrun keeps /data across code updates and restarts. A custom DB_PATH can still be used.
 DB_PATH = os.environ.get("DB_PATH", "/data/cercis.db")
 
 ADD_LINK, ADD_FORM = range(2)
@@ -56,8 +55,6 @@ def db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )"""
     )
-
-    # Migrate databases created by earlier versions without deleting existing data.
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(tracks)").fetchall()}
     migrations = {
         "release_date": "ALTER TABLE tracks ADD COLUMN release_date TEXT",
@@ -66,7 +63,6 @@ def db():
     for column, statement in migrations.items():
         if column not in columns:
             conn.execute(statement)
-
     conn.commit()
     return conn
 
@@ -125,21 +121,43 @@ def is_admin(update):
     return bool(ADMIN_ID and update.effective_user and update.effective_user.id == ADMIN_ID)
 
 
+def _clean_field(value):
+    value = value.strip()
+    if len(value) >= 4 and value.startswith("**") and value.endswith("**"):
+        value = value[2:-2].strip()
+    return value.strip()
+
+
 def parse_info_form(text):
-    """Parse the admin's single structured message into the five requested fields."""
-    patterns = {
-        "title": r"(?:🎵\s*)?(?:\*\*\s*)?نام\s+موزیک(?:\s*\*\*)?\s*[:：]\s*([\s\S]*?)(?=\n\s*🎹|\n\s*📅|\n\s*✏️|\n\s*📝|$)",
-        "artist": r"(?:🎹\s*)?(?:\*\*\s*)?خواننده(?:\s*\*\*)?\s*[:：]\s*([\s\S]*?)(?=\n\s*🎵|\n\s*📅|\n\s*✏️|\n\s*📝|$)",
-        "release_date": r"(?:📅\s*)?(?:\*\*\s*)?تاریخ\s+انتشار(?:\s*\*\*)?\s*[:：]\s*([\s\S]*?)(?=\n\s*🎵|\n\s*🎹|\n\s*✏️|\n\s*📝|$)",
-        "lyrics": r"(?:✏️\s*)?(?:\*\*\s*)?متن\s+آهنگ(?:\s*\*\*)?\s*[:：]\s*([\s\S]*?)(?=\n\s*🎵|\n\s*🎹|\n\s*📅|\n\s*📝|$)",
-        "description": r"(?:📝\s*)?(?:\*\*\s*)?توضیحات(?:\s*\*\*)?\s*[:：]\s*([\s\S]*?)\s*$",
+    """Parse all five fields from one message, with optional labels/colons and multiline values."""
+    heading_re = re.compile(
+        r"^\s*(?P<emoji>🎵|🎹|📅|✏️|📝)\s*"
+        r"(?:(?:\*\*)?\s*(?P<label>نام\s+موزیک|خواننده|تاریخ\s+انتشار|متن\s+آهنگ|توضیحات)\s*(?:\*\*)?\s*)?"
+        r"(?::|：)?\s*(?P<value>.*)\s*$"
+    )
+    key_by_emoji = {
+        "🎵": "title",
+        "🎹": "artist",
+        "📅": "release_date",
+        "✏️": "lyrics",
+        "📝": "description",
     }
+    fields = {key: [] for key in key_by_emoji.values()}
+    current = None
 
-    result = {}
-    for key, pattern in patterns.items():
-        match = re.search(pattern, text, flags=re.IGNORECASE)
-        result[key] = match.group(1).strip() if match else ""
+    for raw_line in text.replace("\r\n", "\n").split("\n"):
+        match = heading_re.match(raw_line)
+        if match:
+            current = key_by_emoji[match.group("emoji")]
+            value = _clean_field(match.group("value"))
+            if value:
+                fields[current].append(value)
+        elif current is not None:
+            continuation = raw_line.strip()
+            if continuation:
+                fields[current].append(continuation)
 
+    result = {key: "\n".join(values).strip() for key, values in fields.items()}
     missing = [
         label
         for key, label in [
@@ -176,35 +194,33 @@ async def lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     channel, post_id = parsed
     row = get_track(channel, post_id)
     if not row:
-        await update.message.reply_text("❌ اطلاعاتی برای این پست ثبت نشده است.")
+        await update.message.reply_text(
+            "🌳 این موسیقی هنوز در باغ Cercis ثبت نشده است.\n"
+            "به‌زودی شاید اطلاعاتش به آرشیو اضافه شود. 🎵"
+        )
         return
     await update.message.reply_text(format_track(row), parse_mode="HTML", disable_web_page_preview=True)
 
 
 async def forwarded_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Look up a track by the original channel post of a forwarded message."""
     message = update.message
     origin = message.forward_origin if message else None
-
     if origin is None or getattr(origin, "type", None) != "channel":
         await message.reply_text(
             "❌ نتوانستم پست اصلی را شناسایی کنم.\n\n"
             "لطفاً موزیک را مستقیماً از کانال با گزینهٔ Forward برای ربات بفرستید."
         )
         return
-
     channel_chat = origin.chat
     post_id = origin.message_id
     channel = getattr(channel_chat, "username", None)
-
     row = get_track(channel, post_id) if channel else None
     if not row:
         await message.reply_text(
-            "❌ این پست هنوز در Cercis Garden ثبت نشده است.\n\n"
-            "از لینک همان پست برای ثبت آن در پنل مدیریت استفاده کنید."
+            "🌳 این موسیقی هنوز در باغ Cercis ثبت نشده است.\n"
+            "به‌زودی شاید اطلاعاتش به آرشیو اضافه شود. 🎵"
         )
         return
-
     await message.reply_text(format_track(row), parse_mode="HTML", disable_web_page_preview=True)
 
 
@@ -289,7 +305,6 @@ async def add_form(update: Update, context: ContextTypes.DEFAULT_TYPE):
             + "\n\nدوباره همه اطلاعات را در یک پیام و با همان قالب ارسال کنید."
         )
         return ADD_FORM
-
     data = context.user_data.pop("add")
     save_track(
         channel=data["channel"],
@@ -334,7 +349,6 @@ def build_app():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin))
     app.add_handler(CallbackQueryHandler(menu_callback, pattern="^(help|about)$"))
-
     admin_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin_panel, pattern="^(add|delete|stats)$")],
         states={
@@ -346,7 +360,6 @@ def build_app():
         allow_reentry=True,
     )
     app.add_handler(admin_conv)
-
     app.add_handler(MessageHandler(filters.FORWARDED, forwarded_lookup))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, lookup))
     return app
