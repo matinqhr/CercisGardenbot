@@ -23,8 +23,8 @@ TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 DB_PATH = os.environ.get("DB_PATH", "/data/cercis.db")
 
-ADD_LINK, ADD_FORM = range(2)
-DELETE_LINK = 2
+ADD_LINK, ADD_FORM, EDIT_LINK, EDIT_FORM = range(4)
+DELETE_LINK = 4
 
 FORM_TEMPLATE = (
     "🎵 **نام موزیک**\n"
@@ -100,6 +100,18 @@ def save_track(channel, post_id, url, title, artist, release_date, lyrics, descr
     conn.close()
 
 
+def update_track(channel, post_id, title, artist, release_date, lyrics, description):
+    conn = db()
+    cur = conn.execute(
+        """UPDATE tracks SET title=?, artist=?, release_date=?, lyrics=?, description=?
+           WHERE channel=? AND post_id=?""",
+        (title, artist, release_date, lyrics, description, channel, post_id),
+    )
+    conn.commit()
+    conn.close()
+    return cur.rowcount
+
+
 def format_track(row):
     parts = []
     if row["title"]:
@@ -129,22 +141,14 @@ def _clean_field(value):
 
 
 def parse_info_form(text):
-    """Parse all five fields from one message, with optional labels/colons and multiline values."""
     heading_re = re.compile(
         r"^\s*(?P<emoji>🎵|🎹|📅|✏️|📝)\s*"
         r"(?:(?:\*\*)?\s*(?P<label>نام\s+موزیک|خواننده|تاریخ\s+انتشار|متن\s+آهنگ|توضیحات)\s*(?:\*\*)?\s*)?"
         r"(?::|：)?\s*(?P<value>.*)\s*$"
     )
-    key_by_emoji = {
-        "🎵": "title",
-        "🎹": "artist",
-        "📅": "release_date",
-        "✏️": "lyrics",
-        "📝": "description",
-    }
+    key_by_emoji = {"🎵": "title", "🎹": "artist", "📅": "release_date", "✏️": "lyrics", "📝": "description"}
     fields = {key: [] for key in key_by_emoji.values()}
     current = None
-
     for raw_line in text.replace("\r\n", "\n").split("\n"):
         match = heading_re.match(raw_line)
         if match:
@@ -156,34 +160,20 @@ def parse_info_form(text):
             continuation = raw_line.strip()
             if continuation:
                 fields[current].append(continuation)
-
     result = {key: "\n".join(values).strip() for key, values in fields.items()}
-    missing = [
-        label
-        for key, label in [
-            ("title", "🎵 نام موزیک"),
-            ("artist", "🎹 خواننده"),
-            ("release_date", "📅 تاریخ انتشار"),
-            ("lyrics", "✏️ متن آهنگ"),
-            ("description", "📝 توضیحات"),
-        ]
-        if not result[key]
-    ]
+    missing = [label for key, label in [
+        ("title", "🎵 نام موزیک"), ("artist", "🎹 خواننده"),
+        ("release_date", "📅 تاریخ انتشار"), ("lyrics", "✏️ متن آهنگ"),
+        ("description", "📝 توضیحات")
+    ] if not result[key]]
     if missing:
         return None, missing
     return result, []
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🎵 راهنما", callback_data="help")],
-        [InlineKeyboardButton("ℹ️ درباره ربات", callback_data="about")],
-    ]
-    await update.message.reply_text(
-        "🌳 <b>Cercis Garden</b>\n\nبرای دریافت اطلاعات یک موسیقی، لینک پست آن را ارسال کنید.",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
+    keyboard = [[InlineKeyboardButton("🎵 راهنما", callback_data="help")], [InlineKeyboardButton("ℹ️ درباره ربات", callback_data="about")]]
+    await update.message.reply_text("🌳 <b>Cercis Garden</b>\n\nبرای دریافت اطلاعات یک موسیقی، لینک پست آن را ارسال کنید.", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -194,10 +184,7 @@ async def lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     channel, post_id = parsed
     row = get_track(channel, post_id)
     if not row:
-        await update.message.reply_text(
-            "🌳 این موسیقی هنوز در باغ Cercis ثبت نشده است.\n"
-            "به‌زودی شاید اطلاعاتش به آرشیو اضافه شود. 🎵"
-        )
+        await update.message.reply_text("🌳 این موسیقی هنوز در باغ Cercis ثبت نشده است.\nبه‌زودی شاید اطلاعاتش به آرشیو اضافه شود. 🎵")
         return
     await update.message.reply_text(format_track(row), parse_mode="HTML", disable_web_page_preview=True)
 
@@ -206,20 +193,14 @@ async def forwarded_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     origin = message.forward_origin if message else None
     if origin is None or getattr(origin, "type", None) != "channel":
-        await message.reply_text(
-            "❌ نتوانستم پست اصلی را شناسایی کنم.\n\n"
-            "لطفاً موزیک را مستقیماً از کانال با گزینهٔ Forward برای ربات بفرستید."
-        )
+        await message.reply_text("❌ نتوانستم پست اصلی را شناسایی کنم.\n\nلطفاً موزیک را مستقیماً از کانال با گزینهٔ Forward برای ربات بفرستید.")
         return
     channel_chat = origin.chat
     post_id = origin.message_id
     channel = getattr(channel_chat, "username", None)
     row = get_track(channel, post_id) if channel else None
     if not row:
-        await message.reply_text(
-            "🌳 این موسیقی هنوز در باغ Cercis ثبت نشده است.\n"
-            "به‌زودی شاید اطلاعاتش به آرشیو اضافه شود. 🎵"
-        )
+        await message.reply_text("🌳 این موسیقی هنوز در باغ Cercis ثبت نشده است.\nبه‌زودی شاید اطلاعاتش به آرشیو اضافه شود. 🎵")
         return
     await message.reply_text(format_track(row), parse_mode="HTML", disable_web_page_preview=True)
 
@@ -228,14 +209,9 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     if q.data == "help":
-        await q.edit_message_text(
-            "🔗 لینک پست موسیقی را همین‌جا ارسال کنید تا اطلاعات ثبت‌شده آن را پیدا کنم.\n\n"
-            "همچنین می‌توانید خود پست یا فایل موسیقی را مستقیماً از کانال برای ربات Forward کنید."
-        )
+        await q.edit_message_text("🔗 لینک پست موسیقی را همین‌جا ارسال کنید تا اطلاعات ثبت‌شده آن را پیدا کنم.\n\nهمچنین می‌توانید خود پست یا فایل موسیقی را مستقیماً از کانال برای ربات Forward کنید.")
     elif q.data == "about":
-        await q.edit_message_text(
-            "🌳 Cercis Garden\nکتابخانه‌ای از اطلاعات موسیقی‌های ثبت‌شده توسط مدیریت."
-        )
+        await q.edit_message_text("🌳 Cercis Garden\nکتابخانه‌ای از اطلاعات موسیقی‌های ثبت‌شده توسط مدیریت.")
 
 
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -244,14 +220,11 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     keyboard = [
         [InlineKeyboardButton("➕ افزودن پست", callback_data="add")],
+        [InlineKeyboardButton("✏️ ویرایش اطلاعات", callback_data="edit")],
         [InlineKeyboardButton("🗑 حذف پست", callback_data="delete")],
         [InlineKeyboardButton("📊 آمار", callback_data="stats")],
     ]
-    await update.message.reply_text(
-        "👑 <b>پنل مدیریت Cercis Garden</b>",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
+    await update.message.reply_text("👑 <b>پنل مدیریت Cercis Garden</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -260,13 +233,11 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update):
         return ConversationHandler.END
     if q.data == "add":
-        await q.message.reply_text(
-            "🔗 اول لینک پست را ارسال کنید.\n\n"
-            "بعد، اطلاعات موسیقی را <b>در یک پیام واحد</b> دقیقاً در این قالب بفرستید:\n\n"
-            f"<code>{escape(FORM_TEMPLATE)}</code>",
-            parse_mode="HTML",
-        )
+        await q.message.reply_text("🔗 اول لینک پست را ارسال کنید.\n\nبعد، اطلاعات موسیقی را <b>در یک پیام واحد</b> دقیقاً در این قالب بفرستید:\n\n" + f"<code>{escape(FORM_TEMPLATE)}</code>", parse_mode="HTML")
         return ADD_LINK
+    if q.data == "edit":
+        await q.message.reply_text("🔗 لینک پستی که می‌خواهید ویرایش کنید را ارسال کنید.")
+        return EDIT_LINK
     if q.data == "delete":
         await q.message.reply_text("🔗 لینک پستی که می‌خواهید حذف کنید را ارسال کنید.")
         return DELETE_LINK
@@ -283,40 +254,47 @@ async def add_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not parsed:
         await update.message.reply_text("❌ لینک معتبر نیست. دوباره ارسال کنید.")
         return ADD_LINK
-    context.user_data["add"] = {
-        "channel": parsed[0],
-        "post_id": parsed[1],
-        "url": update.message.text.strip(),
-    }
-    await update.message.reply_text(
-        "📝 حالا همه اطلاعات را در <b>یک پیام واحد</b> و دقیقاً با این قالب ارسال کنید:\n\n"
-        f"<code>{escape(FORM_TEMPLATE)}</code>",
-        parse_mode="HTML",
-    )
+    context.user_data["add"] = {"channel": parsed[0], "post_id": parsed[1], "url": update.message.text.strip()}
+    await update.message.reply_text("📝 حالا همه اطلاعات را در <b>یک پیام واحد</b> و دقیقاً با این قالب ارسال کنید:\n\n" + f"<code>{escape(FORM_TEMPLATE)}</code>", parse_mode="HTML")
     return ADD_FORM
 
 
 async def add_form(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result, missing = parse_info_form(update.message.text or "")
     if not result:
-        await update.message.reply_text(
-            "❌ قالب کامل نیست. این بخش‌ها پیدا نشد:\n"
-            + "\n".join(f"• {item}" for item in missing)
-            + "\n\nدوباره همه اطلاعات را در یک پیام و با همان قالب ارسال کنید."
-        )
+        await update.message.reply_text("❌ قالب کامل نیست. این بخش‌ها پیدا نشد:\n" + "\n".join(f"• {item}" for item in missing) + "\n\nدوباره همه اطلاعات را در یک پیام و با همان قالب ارسال کنید.")
         return ADD_FORM
     data = context.user_data.pop("add")
-    save_track(
-        channel=data["channel"],
-        post_id=data["post_id"],
-        url=data["url"],
-        title=result["title"],
-        artist=result["artist"],
-        release_date=result["release_date"],
-        lyrics=result["lyrics"],
-        description=result["description"],
-    )
+    save_track(data["channel"], data["post_id"], data["url"], result["title"], result["artist"], result["release_date"], result["lyrics"], result["description"])
     await update.message.reply_text("✅ اطلاعات پست با موفقیت ذخیره شد.")
+    return ConversationHandler.END
+
+
+async def edit_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    parsed = parse_post_link(update.message.text or "")
+    if not parsed:
+        await update.message.reply_text("❌ لینک معتبر نیست. دوباره ارسال کنید.")
+        return EDIT_LINK
+    row = get_track(parsed[0], parsed[1])
+    if not row:
+        await update.message.reply_text("❌ اطلاعاتی برای این پست پیدا نشد.")
+        return EDIT_LINK
+    context.user_data["edit"] = {"channel": parsed[0], "post_id": parsed[1]}
+    await update.message.reply_text("📌 <b>اطلاعات فعلی:</b>\n\n" + format_track(row) + "\n\n✏️ حالا نسخهٔ جدید اطلاعات را <b>در یک پیام واحد</b> و با این قالب ارسال کنید:\n\n" + f"<code>{escape(FORM_TEMPLATE)}</code>", parse_mode="HTML", disable_web_page_preview=True)
+    return EDIT_FORM
+
+
+async def edit_form(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    result, missing = parse_info_form(update.message.text or "")
+    if not result:
+        await update.message.reply_text("❌ قالب کامل نیست. این بخش‌ها پیدا نشد:\n" + "\n".join(f"• {item}" for item in missing) + "\n\nنسخهٔ جدید را دوباره در یک پیام ارسال کنید.")
+        return EDIT_FORM
+    data = context.user_data.pop("edit")
+    updated = update_track(data["channel"], data["post_id"], result["title"], result["artist"], result["release_date"], result["lyrics"], result["description"])
+    if not updated:
+        await update.message.reply_text("❌ ویرایش انجام نشد؛ اطلاعات پست پیدا نشد.")
+        return ConversationHandler.END
+    await update.message.reply_text("✅ اطلاعات موسیقی با موفقیت ویرایش شد.")
     return ConversationHandler.END
 
 
@@ -335,9 +313,7 @@ async def delete_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cur = conn.execute("DELETE FROM tracks WHERE channel=? AND post_id=?", parsed)
     conn.commit()
     conn.close()
-    await update.message.reply_text(
-        "✅ اطلاعات حذف شد." if cur.rowcount else "❌ اطلاعاتی برای این پست پیدا نشد."
-    )
+    await update.message.reply_text("✅ اطلاعات حذف شد." if cur.rowcount else "❌ اطلاعاتی برای این پست پیدا نشد.")
     return ConversationHandler.END
 
 
@@ -350,10 +326,12 @@ def build_app():
     app.add_handler(CommandHandler("admin", admin))
     app.add_handler(CallbackQueryHandler(menu_callback, pattern="^(help|about)$"))
     admin_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(admin_panel, pattern="^(add|delete|stats)$")],
+        entry_points=[CallbackQueryHandler(admin_panel, pattern="^(add|edit|delete|stats)$")],
         states={
             ADD_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_link)],
             ADD_FORM: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_form)],
+            EDIT_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_link)],
+            EDIT_FORM: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_form)],
             DELETE_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_link)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
