@@ -1,0 +1,14 @@
+{
+  "name": "cercis-garden-bot-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:create": "wrangler d1 create cercis-garden",
+    "db:migrate": "wrangler d1 migrations apply DB --remote",
+    "dev": "wrangler dev",
+    "deploy": "npm run db:migrate && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
