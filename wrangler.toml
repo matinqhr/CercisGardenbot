@@ -5,7 +5,7 @@ compatibility_date = "2026-08-22"
 [[d1_databases]]
 binding = "DB"
 database_name = "cercisgardenbot-db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "79e38c86-9b37-4f07-90ab-fa71d160fe35"
 
 [vars]
 # Set BOT_TOKEN, ADMIN_ID and WEBHOOK_SECRET as encrypted Worker secrets.
