@@ -1,0 +1,12 @@
+name = "cercis-garden-bot"
+main = "src/worker.js"
+compatibility_date = "2026-08-24"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cercis-garden"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[vars]
+ADMIN_ID = "REPLACE_WITH_ADMIN_ID"
