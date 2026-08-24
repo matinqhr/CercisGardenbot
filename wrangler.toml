@@ -1,0 +1,11 @@
+name = "cercisgardenbot"
+main = "src/index.js"
+compatibility_date = "2026-08-22"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cercisgardenbot-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+[vars]
+# Set BOT_TOKEN, ADMIN_ID and WEBHOOK_SECRET as encrypted Worker secrets.
