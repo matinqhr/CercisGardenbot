@@ -97,7 +97,12 @@ async function improvementIdeas(e, c) {
     rows.forEach((row, i) => { text += `${i + 1}. ${esc(row.text)}\n\n`; });
   }
   text += "\n💡 هر پیام جدیدی که ارسال کنی به‌عنوان یک مورد جدید به این فهرست اضافه می‌شود.";
-  return send(e, c, text, { reply_markup: { inline_keyboard: [[{ text: "➕ ثبت کاستی / ایده جدید", callback_data: "idea_add" }], [{ text: "🔄 به‌روزرسانی فهرست", callback_data: "ideas" }], [{ text: "🔙 پنل مدیریت", callback_data: "panel" }]] } });
+  return send(e, c, text, { reply_markup: { inline_keyboard: [
+    [{ text: "➕ ثبت کاستی / ایده جدید", callback_data: "idea_add" }],
+    [{ text: "🗑 حذف ایده با شماره", callback_data: "idea_delete" }],
+    [{ text: "🔄 به‌روزرسانی فهرست", callback_data: "ideas" }],
+    [{ text: "🔙 پنل مدیریت", callback_data: "panel" }]
+  ] } });
 }
 
 async function handleAdminText(e, m, s) {
@@ -108,6 +113,15 @@ async function handleAdminText(e, m, s) {
     await e.DB.prepare("INSERT INTO improvement_ideas(text) VALUES(?)").bind(value).run();
     await clearSession(e, id);
     return send(e, c, "✅ مورد به فهرست «از کاستی تا کمال» اضافه شد.", { reply_markup: { inline_keyboard: [[{ text: "🌱 مشاهده فهرست", callback_data: "ideas" }], [{ text: "👑 پنل مدیریت", callback_data: "panel" }]] } });
+  }
+  if (s.step === "IDEA_DELETE") {
+    const n = Number.parseInt((m.text || "").trim(), 10);
+    const rows = (await e.DB.prepare("SELECT id FROM improvement_ideas ORDER BY id ASC").all()).results || [];
+    if (!Number.isInteger(n) || n < 1 || n > rows.length) return send(e, c, `❌ شماره معتبر نیست. لطفاً عددی بین ۱ تا ${rows.length} ارسال کنید.`);
+    const target = rows[n - 1];
+    await e.DB.prepare("DELETE FROM improvement_ideas WHERE id=?").bind(target.id).run();
+    await clearSession(e, id);
+    return send(e, c, `🗑 مورد شماره ${n} حذف شد.\n\nشماره‌گذاری فهرست به‌صورت خودکار به‌روزرسانی می‌شود.`, { reply_markup: { inline_keyboard: [[{ text: "🌱 مشاهده فهرست", callback_data: "ideas" }], [{ text: "👑 پنل مدیریت", callback_data: "panel" }]] } });
   }
   if (s.step === "ADD_LINK") {
     const p = parseLink(m.text);
@@ -156,6 +170,7 @@ async function handleCallback(e, q) {
   if (q.data === "panel") return adminPanel(e, c);
   if (q.data === "ideas") return improvementIdeas(e, c);
   if (q.data === "idea_add") { await setSession(e, id, { step: "IDEA_ENTRY" }); return send(e, c, "🌱 <b>ثبت کاستی یا ایده</b>\n\nمشکل نسخهٔ فعلی یا ایده‌ای را که دوست داری برای ورژن دوم در نظر بگیری بنویس.\n\nهر پیام = یک مورد از فهرست. می‌توانی هر تعداد مورد که خواستی ثبت کنی."); }
+  if (q.data === "idea_delete") { await setSession(e, id, { step: "IDEA_DELETE" }); return send(e, c, "🗑 <b>حذف ایده</b>\n\nشمارهٔ موردی را که می‌خواهی حذف شود ارسال کن.\n\nشماره‌ها همان شماره‌هایی هستند که در فهرست «از کاستی تا کمال» نمایش داده می‌شوند."); }
   if (q.data === "add") { await setSession(e, id, { step: "ADD_LINK" }); return send(e, c, "🔗 لینک پست را ارسال کنید."); }
   if (q.data === "edit") { await setSession(e, id, { step: "EDIT_LINK" }); return send(e, c, "🔗 لینک پستی را که می‌خواهید ویرایش کنید ارسال کنید."); }
   if (q.data === "delete") { await setSession(e, id, { step: "DELETE_LINK" }); return send(e, c, "🔗 لینک پستی را که می‌خواهید حذف کنید ارسال کنید"); }
