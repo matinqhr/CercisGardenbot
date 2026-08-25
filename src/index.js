@@ -1,21 +1,214 @@
-const tg=async(e,m,b={})=>{const r=await fetch(`https://api.telegram.org/bot${e.BOT_TOKEN}/${m}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)});return r.json()};
-const esc=(v="")=>String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
-const HOME='<a href="https://t.me/Arghavanplaylistt">𝐇𝐨𝐦𝐞</a>';
-const parseLink=t=>{const m=(t||"").trim().match(/^https?:\/\/t\.me\/(?:c\/)?([A-Za-z0-9_]+)\/([0-9]+)(?:\?.*)?$/);return m?{channel:m[1],post_id:Number(m[2])}:null};
-async function ensureSchema(e){await e.DB.prepare(`CREATE TABLE IF NOT EXISTS tracks(id INTEGER PRIMARY KEY AUTOINCREMENT,channel TEXT NOT NULL,post_id INTEGER NOT NULL,url TEXT NOT NULL UNIQUE,title TEXT,artist TEXT,release_date TEXT,lyrics TEXT,description TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();await e.DB.prepare(`CREATE TABLE IF NOT EXISTS sessions(user_id INTEGER PRIMARY KEY,step TEXT NOT NULL,channel TEXT,post_id INTEGER,url TEXT,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();await e.DB.prepare(`CREATE TABLE IF NOT EXISTS users(user_id INTEGER PRIMARY KEY,created_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();const c=await e.DB.prepare("PRAGMA table_info(tracks)").all(),n=new Set((c.results||[]).map(x=>x.name));if(!n.has("content_type"))await e.DB.prepare("ALTER TABLE tracks ADD COLUMN content_type TEXT").run();if(!n.has("details"))await e.DB.prepare("ALTER TABLE tracks ADD COLUMN details TEXT").run()}
-const trackUser=async(e,id)=>{if(id!=null)await e.DB.prepare("INSERT OR IGNORE INTO users(user_id) VALUES(?)").bind(id).run()};
-async function getTrack(e,c,p){return await e.DB.prepare("SELECT * FROM tracks WHERE channel=? AND post_id=?").bind(c,p).first()||null}
-function formatTrack(r){const p=[];if(r.title)p.push(`🏷️ <b>${esc(r.title)}</b>`);if(r.artist)p.push(`🎹 <b>${esc(r.artist)}</b>`);if(r.content_type)p.push(`🗂 ${esc(r.content_type)}`);if(r.release_date)p.push(`📅 ${esc(r.release_date)}`);if(r.details)p.push(`\n📋 <b>اطلاعات</b>\n${esc(r.details)}`);if(r.lyrics)p.push(`\n✏️ <b>متن / اطلاعات تکمیلی</b>\n${esc(r.lyrics)}`);if(r.description)p.push(`\n📝 <b>توضیحات</b>\n${esc(r.description)}`);p.push(`\n🔗 <a href="${esc(r.url)}">مشاهده پست اصلی</a>`);return p.join("\n")}
-function parseForm(t=""){const raw=t.replaceAll("\r\n","\n").trim(),f={title:[],artist:[],content_type:[],details:[],lyrics:[],description:[]},labels=[["🏷️","title"],["🏷","title"],["🎹","artist"],["🗂️","content_type"],["🗂","content_type"],["📂","content_type"],["📋","details"],["✏️","lyrics"],["✏","lyrics"],["📝","description"]];let cur=null,unknown=[];for(const x of raw.split("\n")){const line=x.trim();if(!line){if(cur)f[cur].push("");continue}const hit=labels.find(([a])=>line.startsWith(a));if(hit){cur=hit[1];let v=line.slice(hit[0].length).trim();const rm={title:["عنوان پست"],artist:["هنرمند","هنرمند / سازنده"],content_type:["نوع محتوا","مجموعه / آلبوم"],details:["اطلاعات","اطلاعات اصلی"],lyrics:["متن","متن یا اطلاعات تکمیلی"],description:["توضیحات"]}[cur]||[];for(const z of rm)if(v.startsWith(z)){v=v.slice(z.length).replace(/^[:：]/,"").trim();break}if(v)f[cur].push(v);continue}if(cur)f[cur].push(line);else unknown.push(line)}const r=Object.fromEntries(Object.entries(f).map(([k,v])=>[k,v.join("\n").trim()]));if(unknown.length)r.details=[r.details,...unknown].filter(Boolean).join("\n");if(!r.title){const first=raw.split("\n").map(x=>x.trim()).find(Boolean);r.title=first||""}return r}
-const isAdmin=(e,id)=>String(e.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean).includes(String(id));
-const setSession=async(e,id,d)=>e.DB.prepare(`INSERT INTO sessions(user_id,step,channel,post_id,url,updated_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET step=excluded.step,channel=excluded.channel,post_id=excluded.post_id,url=excluded.url,updated_at=CURRENT_TIMESTAMP`).bind(id,d.step||"",d.channel||null,d.post_id||null,d.url||null).run();
-const getSession=(e,id)=>e.DB.prepare("SELECT * FROM sessions WHERE user_id=?").bind(id).first();
-const clearSession=(e,id)=>e.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(id).run();
-const send=(e,c,t,x={})=>tg(e,"sendMessage",{chat_id:c,text:t,parse_mode:"HTML",...x});
-async function adminPanel(e,c){return send(e,c,"👑 <b>پنل مدیریت 𝐂𝐞𝐫𝐜𝐢𝐬🤖</b>",{reply_markup:{inline_keyboard:[[{text:"➕ افزودن پست",callback_data:"add"}],[{text:"✏️ ویرایش اطلاعات",callback_data:"edit"}],[{text:"🗑 حذف پست",callback_data:"delete"}],[{text:"📜 فهرست پست‌های ثبت‌شده",callback_data:"list"}],[{text:"📊 آمار",callback_data:"stats"}]]}})}
-async function registeredPosts(e,c){const r=await e.DB.prepare("SELECT id,url,title FROM tracks ORDER BY id DESC").all(),rows=r.results||[];if(!rows.length)return send(e,c,"📜 <b>فهرست پست‌های ثبت‌شده</b>\n\nهنوز هیچ پستی ثبت نشده است.");let text="📜 <b>فهرست پست‌های ثبت‌شده</b>\n\n";for(let i=0;i<rows.length;i++){const row=rows[i],title=row.title?`🏷️ <b>${esc(row.title)}</b>`:`پرونده #${row.id}`,line=`${i+1}. ${title}\n🔗 <a href="${esc(row.url)}">مشاهده پست اصلی</a>\n\n`;if((text+line).length>3800){await send(e,c,text);text="📜 <b>ادامه فهرست</b>\n\n"}text+=line}return send(e,c,text)}
-async function handleAdminText(e,m,s){const id=m.from.id,c=m.chat.id;if(s.step==="ADD_LINK"){const p=parseLink(m.text);if(!p)return send(e,c,"❌ لینک معتبر نیست. دوباره ارسال کنید.");await setSession(e,id,{step:"ADD_FORM",...p,url:m.text.trim()});return send(e,c,"📝 هر چیزی که می‌خواهید درباره پست ذخیره شود بفرستید. هیچ فیلدی اجباری نیست؛ قالب و ایموجی و ترتیب کاملاً آزاد است. بهتر است برای تسهیل‌گری در تشخیص نام پست‌ها در پست‌ها از یک عنوان با ایموجی (🏷️) استفاده کنید.\n\nپس از آنکه اطلاعات را برای من ارسال کردی، وظیفهٔ من است که در این باغ بزرگ، این پرونده را همچون درختی استوار بنشانم؛ ریشه‌هایش را در ژرفای حقیقت بدوانم، تا هر طوفانِ تردید، او را راست‌تر کند.🌳")}if(s.step==="ADD_FORM"){const d=parseForm(m.text||"");await e.DB.prepare(`INSERT INTO tracks(channel,post_id,url,title,artist,release_date,lyrics,description,content_type,details) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(url) DO UPDATE SET title=excluded.title,artist=excluded.artist,lyrics=excluded.lyrics,content_type=excluded.content_type,details=excluded.details,description=excluded.description`).bind(s.channel,s.post_id,s.url,d.title||null,d.artist||null,null,d.lyrics||null,d.description||null,d.content_type||null,d.details||null).run();await clearSession(e,id);return send(e,c,"✅ اطلاعات پست ثبت شد.")}if(s.step==="EDIT_LINK"){const p=parseLink(m.text);if(!p)return send(e,c,"❌ لینک معتبر نیست. دوباره ارسال کنید.");const r=await getTrack(e,p.channel,p.post_id);if(!r)return send(e,c,"❌ پرونده‌ای برای این پست پیدا نشد.");await setSession(e,id,{step:"EDIT_FORM",channel:p.channel,post_id:p.post_id,url:r.url});return send(e,c,"✏️ اطلاعات جدید را بفرستید. هیچ فیلدی اجباری نیست.")}if(s.step==="EDIT_FORM"){const d=parseForm(m.text||"");await e.DB.prepare("UPDATE tracks SET title=?,artist=?,lyrics=?,content_type=?,details=?,description=? WHERE channel=? AND post_id=?").bind(d.title||null,d.artist||null,d.lyrics||null,d.content_type||null,d.details||null,d.description||null,s.channel,s.post_id).run();await clearSession(e,id);return send(e,c,"✅ پروندهٔ پست به‌روزرسانی شد.")}if(s.step==="DELETE_LINK"){const p=parseLink(m.text);if(!p)return send(e,c,"❌ لینک معتبر نیست. دوباره ارسال کنید.");const r=await getTrack(e,p.channel,p.post_id);if(!r)return send(e,c,"❌ پرونده‌ای برای این پست پیدا نشد.");await e.DB.prepare("DELETE FROM tracks WHERE channel=? AND post_id=?").bind(p.channel,p.post_id).run();await clearSession(e,id);return send(e,c,"🗑 پروندهٔ پست حذف شد.")}}
-async function handleCallback(e,q){const c=q.message.chat.id,id=q.from.id;await tg(e,"answerCallbackQuery",{callback_query_id:q.id});if(q.data==="help")return send(e,c,`📚 <b>راهنمای کتابخانه</b>\n\nلینک یا خودِ پستی را که از ${HOME} دریافت کرده‌اید برای من ارسال کنید.\n\nمن فقط اطلاعات پست‌های ثبت‌شده در آرشیو ${HOME} را ارائه می‌کنم.\n\nلطفاً فقط پست‌های ${HOME} را ارسال کنید.`);if(q.data==="about")return send(e,c,`🌳 <b>Cercis Garden</b>\n\nکتابخانه‌ای از اطلاعات پست‌های ${HOME}.\n\nموسیقی فقط یکی از انواع محتوایی است که می‌تواند در آن پرونده داشته باشد.`);if(!isAdmin(e,id))return;if(q.data==="add"){await setSession(e,id,{step:"ADD_LINK"});return send(e,c,"🔗 لینک پست را ارسال کنید.")}if(q.data==="edit"){await setSession(e,id,{step:"EDIT_LINK"});return send(e,c,"🔗 لینک پستی را که می‌خواهید ویرایش کنید ارسال کنید.")}if(q.data==="delete"){await setSession(e,id,{step:"DELETE_LINK"});return send(e,c,"🔗 لینک پستی را که می‌خواهید حذف کنید ارسال کنید")}if(q.data==="list")return registeredPosts(e,c);if(q.data==="stats"){const r=await e.DB.prepare("SELECT COUNT(*) AS n FROM tracks").first(),u=await e.DB.prepare("SELECT COUNT(*) AS n FROM users").first();return send(e,c,`📊 <b>آمار ربات</b>\n\n📚 تعداد پرونده‌های ثبت‌شده: ${r?.n||0}\n👥 تعداد اعضای ربات: ${u?.n||0}`)}}
-async function handleMessage(e,m){if(!m)return;const c=m.chat?.id,id=m.from?.id;if(id!=null)await trackUser(e,id);if(m.text==="/start")return send(e,c,`🌳 <b>Cercis Garden</b>\n\nکتابخانه‌ای از اطلاعات پست‌های ${HOME}.\n\nلینک یا خودِ پستی را که از ${HOME} دریافت کرده‌اید برای من ارسال کنید.`,{reply_markup:{inline_keyboard:[[{text:"📚 راهنما",callback_data:"help"}],[{text:"ℹ️ درباره ربات",callback_data:"about"}]]}});if(m.text==="/admin")return isAdmin(e,id)?adminPanel(e,c):send(e,c,"⛔ دسترسی ندارید.");if(isAdmin(e,id)){const s=await getSession(e,id);if(s&&m.text&&!m.text.startsWith("/"))return handleAdminText(e,m,s)}const o=m.forward_origin;if(o&&(o.type==="channel"||o.type==="channel_message")){const ch=o.chat?.username||o.chat?.id,pid=o.message_id,r=ch?await getTrack(e,ch,pid):null;return r?send(e,c,formatTrack(r),{reply_to_message_id:m.message_id}):send(e,c,`📚 این پست هنوز در کتابخانهٔ ${HOME} ثبت نشده است.\n\nلطفاً فقط پست‌های ${HOME} را برای من ارسال کنید.`,{reply_to_message_id:m.message_id})}if(m.text){const p=parseLink(m.text);if(!p)return send(e,c,`❌ لطفاً لینک یک پست تلگرام را ارسال کنید.\n\nاین کتابخانه برای پست‌های ${HOME} است.`);const r=await getTrack(e,p.channel,p.post_id);return r?send(e,c,formatTrack(r),{reply_to_message_id:m.message_id}):send(e,c,`📚 این پست در کتابخانهٔ ${HOME} ثبت نشده است.\n\nلطفاً فقط پست‌های ${HOME} را برای من ارسال کنید.`,{reply_to_message_id:m.message_id})}}
-async function setWebhook(e,u){const s=e.WEBHOOK_SECRET?{secret_token:e.WEBHOOK_SECRET}:{};return tg(e,"setWebhook",{url:u,allowed_updates:["message","callback_query"],drop_pending_updates:false,...s})}
-export default{async fetch(request,e){try{if(!e.BOT_TOKEN||!e.ADMIN_ID||!e.DB)return new Response("Missing BOT_TOKEN, ADMIN_ID or DB binding",{status:500});await ensureSchema(e);const u=new URL(request.url);if(request.method==="GET")return new Response("Cercis Garden Bot is running.");if(request.method!=="POST")return new Response("Method Not Allowed",{status:405});const x=await request.json();if(x.callback_query)await handleCallback(e,x.callback_query);else if(x.message)await handleMessage(e,x.message);return new Response("ok")}catch(err){console.error(err);return new Response("Internal Error",{status:500})}}};
+const tg = async (e, m, b = {}) => {
+  const r = await fetch(`https://api.telegram.org/bot${e.BOT_TOKEN}/${m}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
+  return r.json();
+};
+
+const esc = (v = "") => String(v).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+const HOME = '<a href="https://t.me/Arghavanplaylistt">𝐇𝐨𝐦𝐞</a>';
+const parseLink = t => { const m = (t || "").trim().match(/^https?:\/\/t\.me\/(?:c\/)?([A-Za-z0-9_]+)\/([0-9]+)(?:\?.*)?$/); return m ? { channel: m[1], post_id: Number(m[2]) } : null; };
+
+async function ensureSchema(e) {
+  await e.DB.prepare(`CREATE TABLE IF NOT EXISTS tracks(id INTEGER PRIMARY KEY AUTOINCREMENT,channel TEXT NOT NULL,post_id INTEGER NOT NULL,url TEXT NOT NULL UNIQUE,title TEXT,artist TEXT,release_date TEXT,lyrics TEXT,description TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
+  await e.DB.prepare(`CREATE TABLE IF NOT EXISTS sessions(user_id INTEGER PRIMARY KEY,step TEXT NOT NULL,channel TEXT,post_id INTEGER,url TEXT,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
+  await e.DB.prepare(`CREATE TABLE IF NOT EXISTS users(user_id INTEGER PRIMARY KEY,created_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
+  await e.DB.prepare(`CREATE TABLE IF NOT EXISTS improvement_ideas(id INTEGER PRIMARY KEY AUTOINCREMENT,text TEXT NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();
+  const c = await e.DB.prepare("PRAGMA table_info(tracks)").all(), n = new Set((c.results || []).map(x => x.name));
+  if (!n.has("content_type")) await e.DB.prepare("ALTER TABLE tracks ADD COLUMN content_type TEXT").run();
+  if (!n.has("details")) await e.DB.prepare("ALTER TABLE tracks ADD COLUMN details TEXT").run();
+}
+
+const trackUser = async (e, id) => { if (id != null) await e.DB.prepare("INSERT OR IGNORE INTO users(user_id) VALUES(?)").bind(id).run(); };
+const isAdmin = (e, id) => String(e.ADMIN_ID || "").split(",").map(x => x.trim()).filter(Boolean).includes(String(id));
+const getTrack = (e, c, p) => e.DB.prepare("SELECT * FROM tracks WHERE channel=? AND post_id=?").bind(c, p).first();
+const setSession = (e, id, d) => e.DB.prepare(`INSERT INTO sessions(user_id,step,channel,post_id,url,updated_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET step=excluded.step,channel=excluded.channel,post_id=excluded.post_id,url=excluded.url,updated_at=CURRENT_TIMESTAMP`).bind(id, d.step || "", d.channel || null, d.post_id || null, d.url || null).run();
+const getSession = (e, id) => e.DB.prepare("SELECT * FROM sessions WHERE user_id=?").bind(id).first();
+const clearSession = (e, id) => e.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(id).run();
+const send = (e, c, t, x = {}) => tg(e, "sendMessage", { chat_id: c, text: t, parse_mode: "HTML", ...x });
+
+function formatTrack(r) {
+  const p = [];
+  if (r.title) p.push(`🏷️ <b>${esc(r.title)}</b>`);
+  if (r.artist) p.push(`🎹 <b>${esc(r.artist)}</b>`);
+  if (r.content_type) p.push(`🗂 ${esc(r.content_type)}`);
+  if (r.release_date) p.push(`📅 ${esc(r.release_date)}`);
+  if (r.details) p.push(`\n📋 <b>اطلاعات</b>\n${esc(r.details)}`);
+  if (r.lyrics) p.push(`\n✏️ <b>متن / اطلاعات تکمیلی</b>\n${esc(r.lyrics)}`);
+  if (r.description) p.push(`\n📝 <b>توضیحات</b>\n${esc(r.description)}`);
+  p.push(`\n🔗 <a href="${esc(r.url)}">مشاهده پست اصلی</a>`);
+  return p.join("\n");
+}
+
+function parseForm(t = "") {
+  const raw = t.replaceAll("\r\n", "\n").trim();
+  const f = { title: [], artist: [], content_type: [], details: [], lyrics: [], description: [] };
+  const labels = [["🏷️", "title"], ["🏷", "title"], ["🎹", "artist"], ["🗂️", "content_type"], ["🗂", "content_type"], ["📂", "content_type"], ["📋", "details"], ["✏️", "lyrics"], ["✏", "lyrics"], ["📝", "description"]];
+  let cur = null, unknown = [];
+  for (const x of raw.split("\n")) {
+    const line = x.trim();
+    if (!line) { if (cur) f[cur].push(""); continue; }
+    const hit = labels.find(([a]) => line.startsWith(a));
+    if (hit) {
+      cur = hit[1];
+      let v = line.slice(hit[0].length).trim();
+      const rm = { title: ["عنوان پست"], artist: ["هنرمند", "هنرمند / سازنده"], content_type: ["نوع محتوا", "مجموعه / آلبوم"], details: ["اطلاعات", "اطلاعات اصلی"], lyrics: ["متن", "متن یا اطلاعات تکمیلی"], description: ["توضیحات"] }[cur] || [];
+      for (const z of rm) if (v.startsWith(z)) { v = v.slice(z.length).replace(/^[:：]/, "").trim(); break; }
+      if (v) f[cur].push(v);
+      continue;
+    }
+    if (cur) f[cur].push(line); else unknown.push(line);
+  }
+  const r = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.join("\n").trim()]));
+  if (unknown.length) r.details = [r.details, ...unknown].filter(Boolean).join("\n");
+  if (!r.title) r.title = raw.split("\n").map(x => x.trim()).find(Boolean) || "";
+  return r;
+}
+
+async function adminPanel(e, c) {
+  return send(e, c, "👑 <b>پنل مدیریت 𝐂𝐞𝐫𝐜𝐢𝐬🤖</b>", { reply_markup: { inline_keyboard: [
+    [{ text: "➕ افزودن پست", callback_data: "add" }],
+    [{ text: "✏️ ویرایش اطلاعات", callback_data: "edit" }],
+    [{ text: "🗑 حذف پست", callback_data: "delete" }],
+    [{ text: "📜 فهرست پست‌های ثبت‌شده", callback_data: "list" }],
+    [{ text: "📊 آمار", callback_data: "stats" }],
+    [{ text: "🌱 از کاستی تا کمال", callback_data: "ideas" }]
+  ] } });
+}
+
+async function registeredPosts(e, c) {
+  const r = await e.DB.prepare("SELECT id,url,title FROM tracks ORDER BY id DESC").all(), rows = r.results || [];
+  if (!rows.length) return send(e, c, "📜 <b>فهرست پست‌های ثبت‌شده</b>\n\nهنوز هیچ پستی ثبت نشده است.");
+  let text = "📜 <b>فهرست پست‌های ثبت‌شده</b>\n\n";
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i], title = row.title ? `🏷️ <b>${esc(row.title)}</b>` : `پرونده #${row.id}`;
+    const line = `${i + 1}. ${title}\n🔗 <a href="${esc(row.url)}">مشاهده پست اصلی</a>\n\n`;
+    if ((text + line).length > 3800) { await send(e, c, text); text = "📜 <b>ادامه فهرست</b>\n\n"; }
+    text += line;
+  }
+  return send(e, c, text);
+}
+
+async function improvementIdeas(e, c) {
+  const r = await e.DB.prepare("SELECT id,text,created_at FROM improvement_ideas ORDER BY id ASC").all();
+  const rows = r.results || [];
+  let text = "🌱 <b>از کاستی تا کمال</b>\n\n";
+  if (!rows.length) text += "هنوز موردی ثبت نشده است.\n";
+  else {
+    text += "📋 <b>فهرست کاستی‌ها و ایده‌های ورژن دوم</b>\n\n";
+    rows.forEach((row, i) => { text += `${i + 1}. ${esc(row.text)}\n\n`; });
+  }
+  text += "\n💡 هر پیام جدیدی که ارسال کنی به‌عنوان یک مورد جدید به این فهرست اضافه می‌شود.";
+  return send(e, c, text, { reply_markup: { inline_keyboard: [[{ text: "➕ ثبت کاستی / ایده جدید", callback_data: "idea_add" }], [{ text: "🔄 به‌روزرسانی فهرست", callback_data: "ideas" }], [{ text: "🔙 پنل مدیریت", callback_data: "panel" }]] } });
+}
+
+async function handleAdminText(e, m, s) {
+  const id = m.from.id, c = m.chat.id;
+  if (s.step === "IDEA_ENTRY") {
+    const value = (m.text || "").trim();
+    if (!value) return send(e, c, "❌ متن مورد خالی است. یک کاستی یا ایده بنویسید.");
+    await e.DB.prepare("INSERT INTO improvement_ideas(text) VALUES(?)").bind(value).run();
+    await clearSession(e, id);
+    return send(e, c, "✅ مورد به فهرست «از کاستی تا کمال» اضافه شد.", { reply_markup: { inline_keyboard: [[{ text: "🌱 مشاهده فهرست", callback_data: "ideas" }], [{ text: "👑 پنل مدیریت", callback_data: "panel" }]] } });
+  }
+  if (s.step === "ADD_LINK") {
+    const p = parseLink(m.text);
+    if (!p) return send(e, c, "❌ لینک معتبر نیست. دوباره ارسال کنید.");
+    await setSession(e, id, { step: "ADD_FORM", ...p, url: m.text.trim() });
+    return send(e, c, "📝 هر چیزی که می‌خواهید درباره پست ذخیره شود بفرستید. هیچ فیلدی اجباری نیست؛ قالب و ایموجی و ترتیب کاملاً آزاد است. بهتر است برای تسهیل‌گری در تشخیص نام پست‌ها در پست‌ها از یک عنوان با ایموجی (🏷️) استفاده کنید.\n\nپس از آنکه اطلاعات را برای من ارسال کردی، وظیفهٔ من است که در این باغ بزرگ، این پرونده را همچون درختی استوار بنشانم؛ ریشه‌هایش را در ژرفای حقیقت بدوانم، تا هر طوفانِ تردید، او را راست‌تر کند.🌳");
+  }
+  if (s.step === "ADD_FORM") {
+    const d = parseForm(m.text || "");
+    await e.DB.prepare(`INSERT INTO tracks(channel,post_id,url,title,artist,release_date,lyrics,description,content_type,details) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(url) DO UPDATE SET title=excluded.title,artist=excluded.artist,lyrics=excluded.lyrics,content_type=excluded.content_type,details=excluded.details,description=excluded.description`).bind(s.channel, s.post_id, s.url, d.title || null, d.artist || null, null, d.lyrics || null, d.description || null, d.content_type || null, d.details || null).run();
+    await clearSession(e, id);
+    return send(e, c, "✅ اطلاعات پست ثبت شد.");
+  }
+  if (s.step === "EDIT_LINK") {
+    const p = parseLink(m.text);
+    if (!p) return send(e, c, "❌ لینک معتبر نیست. دوباره ارسال کنید.");
+    const r = await getTrack(e, p.channel, p.post_id);
+    if (!r) return send(e, c, "❌ پرونده‌ای برای این پست پیدا نشد.");
+    await setSession(e, id, { step: "EDIT_FORM", channel: p.channel, post_id: p.post_id, url: r.url });
+    return send(e, c, "✏️ اطلاعات جدید را بفرستید. هیچ فیلدی اجباری نیست.");
+  }
+  if (s.step === "EDIT_FORM") {
+    const d = parseForm(m.text || "");
+    await e.DB.prepare("UPDATE tracks SET title=?,artist=?,lyrics=?,content_type=?,details=?,description=? WHERE channel=? AND post_id=?").bind(d.title || null, d.artist || null, d.lyrics || null, d.content_type || null, d.details || null, d.description || null, s.channel, s.post_id).run();
+    await clearSession(e, id);
+    return send(e, c, "✅ پروندهٔ پست به‌روزرسانی شد.");
+  }
+  if (s.step === "DELETE_LINK") {
+    const p = parseLink(m.text);
+    if (!p) return send(e, c, "❌ لینک معتبر نیست. دوباره ارسال کنید.");
+    const r = await getTrack(e, p.channel, p.post_id);
+    if (!r) return send(e, c, "❌ پرونده‌ای برای این پست پیدا نشد.");
+    await e.DB.prepare("DELETE FROM tracks WHERE channel=? AND post_id=?").bind(p.channel, p.post_id).run();
+    await clearSession(e, id);
+    return send(e, c, "🗑 پروندهٔ پست حذف شد.");
+  }
+}
+
+async function handleCallback(e, q) {
+  const c = q.message.chat.id, id = q.from.id;
+  await trackUser(e, id);
+  await tg(e, "answerCallbackQuery", { callback_query_id: q.id });
+  if (q.data === "help") return send(e, c, `📚 <b>راهنمای کتابخانه</b>\n\nلینک یا خودِ پستی را که از ${HOME} دریافت کرده‌اید برای من ارسال کنید.\n\nمن فقط اطلاعات پست‌های ثبت‌شده در آرشیو ${HOME} را ارائه می‌کنم.\n\nلطفاً فقط پست‌های ${HOME} را ارسال کنید.`);
+  if (q.data === "about") return send(e, c, `🌳 <b>Cercis Garden</b>\n\nکتابخانه‌ای از اطلاعات پست‌های ${HOME}.\n\nموسیقی فقط یکی از انواع محتوایی است که می‌تواند در آن پرونده داشته باشد.`);
+  if (!isAdmin(e, id)) return;
+  if (q.data === "panel") return adminPanel(e, c);
+  if (q.data === "ideas") return improvementIdeas(e, c);
+  if (q.data === "idea_add") { await setSession(e, id, { step: "IDEA_ENTRY" }); return send(e, c, "🌱 <b>ثبت کاستی یا ایده</b>\n\nمشکل نسخهٔ فعلی یا ایده‌ای را که دوست داری برای ورژن دوم در نظر بگیری بنویس.\n\nهر پیام = یک مورد از فهرست. می‌توانی هر تعداد مورد که خواستی ثبت کنی."); }
+  if (q.data === "add") { await setSession(e, id, { step: "ADD_LINK" }); return send(e, c, "🔗 لینک پست را ارسال کنید."); }
+  if (q.data === "edit") { await setSession(e, id, { step: "EDIT_LINK" }); return send(e, c, "🔗 لینک پستی را که می‌خواهید ویرایش کنید ارسال کنید."); }
+  if (q.data === "delete") { await setSession(e, id, { step: "DELETE_LINK" }); return send(e, c, "🔗 لینک پستی را که می‌خواهید حذف کنید ارسال کنید"); }
+  if (q.data === "list") return registeredPosts(e, c);
+  if (q.data === "stats") {
+    const r = await e.DB.prepare("SELECT COUNT(*) AS n FROM tracks").first(), u = await e.DB.prepare("SELECT COUNT(*) AS n FROM users").first();
+    return send(e, c, `📊 <b>آمار ربات</b>\n\n📚 تعداد پرونده‌های ثبت‌شده: ${r?.n || 0}\n👥 تعداد اعضای ربات: ${u?.n || 0}`);
+  }
+}
+
+async function handleMessage(e, m) {
+  if (!m) return;
+  const c = m.chat?.id, id = m.from?.id;
+  if (id != null) await trackUser(e, id);
+  if (m.text === "/start") return send(e, c, `🌳 <b>Cercis Garden</b>\n\nکتابخانه‌ای از اطلاعات پست‌های ${HOME}.\n\nلینک یا خودِ پستی را که از ${HOME} دریافت کرده‌اید برای من ارسال کنید.`, { reply_markup: { inline_keyboard: [[{ text: "📚 راهنما", callback_data: "help" }], [{ text: "ℹ️ درباره ربات", callback_data: "about" }]] } });
+  if (m.text === "/admin") return isAdmin(e, id) ? adminPanel(e, c) : send(e, c, "⛔ دسترسی ندارید.");
+  if (isAdmin(e, id)) { const s = await getSession(e, id); if (s && m.text && !m.text.startsWith("/")) return handleAdminText(e, m, s); }
+  const o = m.forward_origin;
+  if (o && (o.type === "channel" || o.type === "channel_message")) {
+    const ch = o.chat?.username || o.chat?.id, pid = o.message_id, r = ch ? await getTrack(e, ch, pid) : null;
+    return r ? send(e, c, formatTrack(r), { reply_to_message_id: m.message_id }) : send(e, c, `📚 این پست هنوز در کتابخانهٔ ${HOME} ثبت نشده است.\n\nلطفاً فقط پست‌های ${HOME} را برای من ارسال کنید.`, { reply_to_message_id: m.message_id });
+  }
+  if (m.text) {
+    const p = parseLink(m.text);
+    if (!p) return send(e, c, `❌ لطفاً لینک یک پست تلگرام را ارسال کنید.\n\nاین کتابخانه برای پست‌های ${HOME} است.`);
+    const r = await getTrack(e, p.channel, p.post_id);
+    return r ? send(e, c, formatTrack(r)) : send(e, c, `📚 این پست در کتابخانهٔ ${HOME} ثبت نشده است.\n\nلطفاً فقط پست‌های ${HOME} را برای من ارسال کنید.`);
+  }
+}
+
+async function setWebhook(e, u) {
+  const s = e.WEBHOOK_SECRET ? { secret_token: e.WEBHOOK_SECRET } : {};
+  return tg(e, "setWebhook", { url: u, allowed_updates: ["message", "callback_query"], drop_pending_updates: false, ...s });
+}
+
+export default {
+  async fetch(request, e) {
+    try {
+      if (!e.BOT_TOKEN || !e.ADMIN_ID || !e.DB) return new Response("Missing BOT_TOKEN, ADMIN_ID or DB binding", { status: 500 });
+      await ensureSchema(e);
+      const u = new URL(request.url);
+      if (request.method === "GET") {
+        if (u.pathname === "/set-webhook") { const r = await setWebhook(e, u.origin); return new Response(JSON.stringify(r), { headers: { "content-type": "application/json" } }); }
+        return new Response("Cercis Garden Bot is running.");
+      }
+      if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+      const x = await request.json();
+      if (x.callback_query) await handleCallback(e, x.callback_query);
+      else if (x.message) await handleMessage(e, x.message);
+      return new Response("ok");
+    } catch (err) {
+      console.error(err);
+      return new Response("Internal Error", { status: 500 });
+    }
+  }
+};
