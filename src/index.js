@@ -185,7 +185,7 @@ async function handleMessage(e, m) {
   if (!m) return;
   const c = m.chat?.id, id = m.from?.id;
   if (id != null) await trackUser(e, id);
-  if (m.text === "/start") return send(e, c, `🌳 <b>Cercis Garden</b>\n\nکتابخانه‌ای از اطلاعات پست‌های ${HOME}.\n\nلینک یا خودِ پستی را که از ${HOME} دریافت کرده‌اید برای من ارسال کنید.`, { reply_markup: { inline_keyboard: [[{ text: "📚 راهنما", callback_data: "help" }], [{ text: "ℹ️ درباره ربات", callback_data: "about" }]] } });
+  if (m.text === "/start") return send(e, c, `🌳 <b>Cercis Garden</b>\n\nکتابخانه‌ای از اطلاعات پست‌های ${HOME}.\n\nلینک یا خودِ پستی را که از ${HOME} دریافت کرده‌اید برای من ارسال کنید.`, { reply_markup: { inline_keyboard: [[{ text: "📚 راهنما", url: "https://telegra.ph/Cercis-08-27" }], [{ text: "ℹ️ درباره ربات", callback_data: "about" }]] } });
   if (m.text === "/admin") return isAdmin(e, id) ? adminPanel(e, c) : send(e, c, "⛔ دسترسی ندارید.");
   if (isAdmin(e, id)) { const s = await getSession(e, id); if (s && m.text && !m.text.startsWith("/")) return handleAdminText(e, m, s); }
   const o = m.forward_origin;
