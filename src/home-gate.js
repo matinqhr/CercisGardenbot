@@ -11,6 +11,8 @@ const esc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replac
 const warning=async(e,c,r)=>{await tg(e,"sendMessage",{chat_id:c,text:`⚠️ <b>هشدار.</b>\nمن اگر جای تو بودم، هیچ‌وقت پستی به‌جز پست‌های ${HOME} را برای خودم (سرسیس) ارسال نمی‌کردم.\n🔗 دفعهٔ بعد، قبل از ارسال مطمئن شو پست از ${HOME} آمده باشد.`,parse_mode:"HTML",...(r?{reply_to_message_id:r}:{})});return new Response("ok",{status:200})};
 const startText=`🌳 <b>Cercis Garden</b>\n\nکتابخانه‌ای از اطلاعات پست‌های ${HOME}.\n\nلینک یا خودِ پستی را که از ${HOME} دریافت کرده‌اید برای من ارسال کنید.`;
 const startKeyboard={inline_keyboard:[[{text:"📚 راهنما",callback_data:"help"}],[{text:"ℹ️ درباره ربات",url:GUIDE}],[{text:"📜 فهرست پست‌های ثبت‌شده",callback_data:"public_list"}]]};
+const guideText=`📚 <b>راهنمای کتابخانه</b>\n\nلینک یا خودِ پستی را که از کانال ${HOME} دریافت کرده‌اید برای من ارسال کنید.\n\nمن فقط اطلاعات پست‌های ثبت‌شده در آرشیو ${HOME} را ارائه می‌کنم.\n\nلطفاً فقط پست‌های ${HOME} را ارسال کنید.`;
+const guideKeyboard={inline_keyboard:[[{text:"🔙 منوی اصلی",callback_data:"public_start"}]]};
 const listKeyboard=(page,total,admin)=>{const row=[];if(page>1)row.push({text:"‹",callback_data:`postlist:${admin?"admin":"public"}:${page-1}`});if(page<total)row.push({text:"›",callback_data:`postlist:${admin?"admin":"public"}:${page+1}`});const k=[];if(row.length)k.push(row);if(admin)k.push([{text:"🔙 پنل مدیریت",callback_data:"panel"}]);else k.push([{text:"🔙 منوی اصلی",callback_data:"public_start"}]);return{inline_keyboard:k}};
 const listText=(rows,page,total)=>{const size=15,start=(page-1)*size;let t=`📜 <b>فهرست پست‌های ثبت‌شده</b>\n\n<b>صفحه ${page} از ${total}</b>\n\n`;for(let i=0;i<rows.length;i++){const r=rows[i],n=start+i+1;t+=`${n}. ${r.title?`🏷️ <b>${esc(r.title)}</b>`:`پرونده #${r.id}`}\n🔗 <a href="${esc(r.url)}">مشاهده پست اصلی</a>\n\n`}return t.trim()};
 async function renderList(e,c,page,admin=false,messageId=null){const size=15;const count=await e.DB.prepare("SELECT COUNT(*) n FROM tracks").first();const total=Math.max(1,Math.ceil(Number(count?.n||0)/size));const p=Math.min(Math.max(Number(page)||1,1),total);const rows=(await e.DB.prepare("SELECT id,url,title FROM tracks ORDER BY id DESC LIMIT ? OFFSET ?").bind(size,(p-1)*size).all()).results||[];if(!Number(count?.n||0))return tgResponse(e,"sendMessage",{chat_id:c,text:"📜 <b>فهرست پست‌های ثبت‌شده</b>\n\nهنوز هیچ پستی ثبت نشده است.",parse_mode:"HTML",reply_markup:listKeyboard(1,1,admin)});const body={chat_id:c,text:listText(rows,p,total),parse_mode:"HTML",reply_markup:listKeyboard(p,total,admin)};return messageId?tgResponse(e,"editMessageText",{...body,message_id:messageId}):tgResponse(e,"sendMessage",body)}
@@ -25,6 +27,11 @@ export default{async fetch(req,e){
       await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
       return warning(e,q.message?.chat?.id,q.message?.message_id)
     }
+  }
+  if(q?.data==="help"){
+    await trackUser(e,q.from?.id);
+    await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+    return tgResponse(e,"editMessageText",{chat_id:q.message?.chat?.id,message_id:q.message?.message_id,text:guideText,parse_mode:"HTML",reply_markup:guideKeyboard});
   }
   if(q?.data==="public_list"||(q?.data==="list"&&isAdmin(e,q.from?.id))){
     await trackUser(e,q.from?.id);
