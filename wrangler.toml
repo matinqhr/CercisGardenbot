@@ -1,5 +1,5 @@
 name = "cercisgardenbot"
-main = "src/home-gate.js"
+main = "src/stats-gate.js"
 compatibility_date = "2026-08-22"
 
 [[d1_databases]]
