@@ -1,5 +1,5 @@
 name = "cercisgardenbot"
-main = "src/link-forward-gate.js"
+main = "src/book-description-gate.js"
 compatibility_date = "2026-08-22"
 
 [[d1_databases]]
