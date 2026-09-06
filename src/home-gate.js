@@ -13,50 +13,35 @@ const startText=`🌳 <b>Cercis Garden</b>\n\nکتابخانه‌ای از اط�
 const startKeyboard={inline_keyboard:[[{text:"📚 راهنما",callback_data:"help"}],[{text:"ℹ️ درباره ربات",url:GUIDE}],[{text:"📜 فهرست پست‌های ثبت‌شده",callback_data:"public_list"}]]};
 const guideText=`📚 <b>راهنمای کتابخانه</b>\n\nلینک یا خودِ پستی را که از کانال ${HOME} دریافت کرده‌اید برای من ارسال کنید.\n\nمن فقط اطلاعات پست‌های ثبت‌شده در آرشیو ${HOME} را ارائه می‌کنم.\n\nلطفاً فقط پست‌های ${HOME} را ارسال کنید.`;
 const guideKeyboard={inline_keyboard:[[{text:"🔙 منوی اصلی",callback_data:"public_start"}]]};
+const adminPanelText="👑 <b>پنل مدیریت 𝐂𝐞𝐫𝐜𝐢𝐬🤖</b>";
+const adminPanelKeyboard={inline_keyboard:[[{text:"➕ افزودن پست",callback_data:"add"}],[{text:"✏️ ویرایش اطلاعات",callback_data:"edit"}],[{text:"🗑 حذف پست",callback_data:"delete"}],[{text:"📜 فهرست پست‌های ثبت‌شده",callback_data:"list"}],[{text:"📊 آمار",callback_data:"stats"}],[{text:"📢 پیام همگانی",callback_data:"broadcast"}],[{text:"🌱 از کاستی تا کمال",callback_data:"ideas"}]]};
 const listKeyboard=(page,total,admin)=>{const row=[];if(page>1)row.push({text:"‹",callback_data:`postlist:${admin?"admin":"public"}:${page-1}`});if(page<total)row.push({text:"›",callback_data:`postlist:${admin?"admin":"public"}:${page+1}`});const k=[];if(row.length)k.push(row);if(admin)k.push([{text:"🔙 پنل مدیریت",callback_data:"panel"}]);else k.push([{text:"🔙 منوی اصلی",callback_data:"public_start"}]);return{inline_keyboard:k}};
 const listText=(rows,page,total)=>{const size=15,start=(page-1)*size;let t=`📜 <b>فهرست پست‌های ثبت‌شده</b>\n\n<b>صفحه ${page} از ${total}</b>\n\n`;for(let i=0;i<rows.length;i++){const r=rows[i],n=start+i+1;t+=`${n}. ${r.title?`🏷️ <b>${esc(r.title)}</b>`:`پرونده #${r.id}`}\n🔗 <a href="${esc(r.url)}">مشاهده پست اصلی</a>\n\n`}return t.trim()};
-async function renderList(e,c,page,admin=false,messageId=null){const size=15;const count=await e.DB.prepare("SELECT COUNT(*) n FROM tracks").first();const total=Math.max(1,Math.ceil(Number(count?.n||0)/size));const p=Math.min(Math.max(Number(page)||1,1),total);const rows=(await e.DB.prepare("SELECT id,url,title FROM tracks ORDER BY id DESC LIMIT ? OFFSET ?").bind(size,(p-1)*size).all()).results||[];if(!Number(count?.n||0))return tgResponse(e,"sendMessage",{chat_id:c,text:"📜 <b>فهرست پست‌های ثبت‌شده</b>\n\nهنوز هیچ پستی ثبت نشده است.",parse_mode:"HTML",reply_markup:listKeyboard(1,1,admin)});const body={chat_id:c,text:listText(rows,p,total),parse_mode:"HTML",reply_markup:listKeyboard(p,total,admin)};return messageId?tgResponse(e,"editMessageText",{...body,message_id:messageId}):tgResponse(e,"sendMessage",body)}
+async function renderList(e,c,page,admin=false,messageId=null){const size=15;const count=await e.DB.prepare("SELECT COUNT(*) n FROM tracks").first();const total=Math.max(1,Math.ceil(Number(count?.n||0)/size));const p=Math.min(Math.max(Number(page)||1,1),total);const rows=(await e.DB.prepare("SELECT id,url,title FROM tracks ORDER BY id DESC LIMIT ? OFFSET ?").bind(size,(p-1)*size).all()).results||[];const body=Number(count?.n||0)?{chat_id:c,text:listText(rows,p,total),parse_mode:"HTML",reply_markup:listKeyboard(p,total,admin)}:{chat_id:c,text:"📜 <b>فهرست پست‌های ثبت‌شده</b>\n\nهنوز هیچ پستی ثبت نشده است.",parse_mode:"HTML",reply_markup:listKeyboard(1,1,admin)};return messageId?tgResponse(e,"editMessageText",{...body,message_id:messageId}):tgResponse(e,"sendMessage",body)}
+const ideaGroups=[["backlog","🟡 در انتظار بررسی"],["selected","🔵 انتخاب‌شده برای ورژن بعدی"],["progress","🟠 در حال پیاده‌سازی"],["done","🟢 تکمیل‌شده"],["dropped","⚪ کنار گذاشته‌شده"]];
+async function ideaRows(e){return (await e.DB.prepare("SELECT id,text,status FROM improvement_ideas ORDER BY id ASC").all()).results||[]}
+function ideaText(rows){let t="🌱 <b>از کاستی تا کمال</b>\n\n";for(const[s,l]of ideaGroups){const a=rows.filter(x=>(x.status||"backlog")===s);if(a.length){t+=`<b>${l}</b>\n`;for(const x of a)t+=`${rows.indexOf(x)+1}. ${esc(x.text)}\n`;t+="\n"}}if(!rows.length)t+="هنوز موردی ثبت نشده است.\n";return t+"💡 این فهرست، Roadmap توسعهٔ Cercis است."}
+const ideaMenu=()=>({inline_keyboard:[[{text:"➕ ثبت کاستی / ایده جدید",callback_data:"idea_add_inline"}],[{text:"🔄 تغییر وضعیت ایده",callback_data:"idea_status_inline"}],[{text:"🗑 حذف ایده با شماره",callback_data:"idea_delete_inline"}],[{text:"🔄 به‌روزرسانی فهرست",callback_data:"ideas_inline"}],[{text:"🔙 پنل مدیریت",callback_data:"panel"}]]});
+async function renderIdeas(e,c,messageId){const rows=await ideaRows(e);const b={chat_id:c,text:ideaText(rows),parse_mode:"HTML",reply_markup:ideaMenu()};return messageId?tgResponse(e,"editMessageText",{...b,message_id:messageId}):tgResponse(e,"sendMessage",b)}
+const statusLabels={backlog:"🟡 در انتظار بررسی",selected:"🔵 انتخاب‌شده برای ورژن بعدی",progress:"🟠 در حال پیاده‌سازی",done:"🟢 تکمیل‌شده",dropped:"⚪ کنار گذاشته‌شده"};
+const statusMenu=id=>({inline_keyboard:[[{text:"🟡 در انتظار بررسی",callback_data:`idea_set:${id}:backlog`}],[{text:"🔵 انتخاب‌شده برای ورژن بعدی",callback_data:`idea_set:${id}:selected`}],[{text:"🟠 در حال پیاده‌سازی",callback_data:`idea_set:${id}:progress`}],[{text:"🟢 تکمیل‌شده",callback_data:`idea_set:${id}:done`}],[{text:"⚪ کنار گذاشته‌شده",callback_data:`idea_set:${id}:dropped`}],[{text:"🔙 بازگشت",callback_data:"ideas_inline"}]]});
+async function editStats(e,c,messageId){const rows=(await e.DB.prepare(`SELECT t.id,t.title,t.url FROM usage_stats s JOIN tracks t ON t.id=CAST(SUBSTR(s.key,6) AS INTEGER) WHERE s.key LIKE 'post:%' ORDER BY s.count DESC,t.id DESC LIMIT 3`).all()).results||[];const md=["🥇","🥈","🥉"];const popular=rows.length?rows.map((r,i)=>`${md[i]} <b>${esc(r.title||`پرونده #${r.id}`)}</b>\n🔗 <a href="${esc(r.url)}">مشاهده پست اصلی</a>`).join("\n\n"):"هنوز آماری برای رتبه‌بندی ثبت نشده است.";const b={chat_id:c,text:`📊 <b>آمار ربات</b>\n\n🏆 <b>سه پست برتر از نگاه فعالیت کاربران</b>\n\n${popular}`,parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:"🔄 به‌روزرسانی آمار",callback_data:"stats_inline"}],[{text:"🔙 پنل مدیریت",callback_data:"panel"}]]}};return messageId?tgResponse(e,"editMessageText",{...b,message_id:messageId}):tgResponse(e,"sendMessage",b)}
+async function customIdeaMessage(e,m,s){const c=m.chat.id,id=m.from.id;let d={};try{d=JSON.parse(s.draft||"{}")}catch{}if(s.step==="CERCIS_IDEA_ENTRY"){const v=(m.text||"").trim();if(!v)return tgResponse(e,"editMessageText",{chat_id:c,message_id:Number(d.message_id),text:"❌ متن مورد خالی است.\n\nلطفاً متن کاستی یا ایده را ارسال کنید.",parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:"🔙 لغو",callback_data:"ideas_inline"}]]}});await e.DB.prepare("INSERT INTO improvement_ideas(text,status) VALUES(?,?)").bind(v,"backlog").run();await e.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(id).run();return renderIdeas(e,c,Number(d.message_id))}return null}
+async function customIdeaCallback(e,q){const c=q.message?.chat?.id,id=q.from?.id;if(!isAdmin(e,id))return new Response("ok",{status:200});const mid=q.message?.message_id;const data=q.data;await trackUser(e,id);await tg(e,"answerCallbackQuery",{callback_query_id:q.id});if(data==="ideas_inline")return renderIdeas(e,c,mid);if(data==="stats_inline")return editStats(e,c,mid);if(data==="idea_add_inline"){await e.DB.prepare("INSERT INTO sessions(user_id,step,channel,post_id,url,draft,updated_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET step=excluded.step,draft=excluded.draft,updated_at=CURRENT_TIMESTAMP").bind(id,"CERCIS_IDEA_ENTRY",String(c),0,"",JSON.stringify({message_id:mid})).run();return tgResponse(e,"editMessageText",{chat_id:c,message_id:mid,text:"🌱 <b>ثبت کاستی / ایده جدید</b>\n\nکاستی یا ایدهٔ جدید را در یک پیام ارسال کنید.",parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:"🔙 لغو",callback_data:"ideas_inline"}]]}})}if(data==="idea_status_inline"){const rows=await ideaRows(e);if(!rows.length)return renderIdeas(e,c,mid);const k=rows.map((r,i)=>[{text:`${i+1}. ${String(r.text).slice(0,48)}`,callback_data:`idea_choose:${i+1}`}]);k.push([{text:"🔙 بازگشت",callback_data:"ideas_inline"}]);return tgResponse(e,"editMessageText",{chat_id:c,message_id:mid,text:"🔄 <b>تغییر وضعیت ایده</b>\n\nایدهٔ موردنظر را انتخاب کنید:",parse_mode:"HTML",reply_markup:{inline_keyboard:k}})}if(data.startsWith("idea_choose:")){const n=Number(data.split(":")[1]),rows=await ideaRows(e);if(!Number.isInteger(n)||n<1||n>rows.length)return renderIdeas(e,c,mid);const r=rows[n-1];return tgResponse(e,"editMessageText",{chat_id:c,message_id:mid,text:`🔄 <b>تغییر وضعیت ایده</b>\n\n<b>${n}. ${esc(r.text)}</b>\n\nوضعیت جدید را انتخاب کنید:`,parse_mode:"HTML",reply_markup:statusMenu(r.id)})}if(data.startsWith("idea_set:")){const [,sid,status]=data.split(":");if(!statusLabels[status])return renderIdeas(e,c,mid);await e.DB.prepare("UPDATE improvement_ideas SET status=? WHERE id=?").bind(status,Number(sid)).run();return renderIdeas(e,c,mid)}if(data==="idea_delete_inline"){const rows=await ideaRows(e);if(!rows.length)return renderIdeas(e,c,mid);const k=rows.map((r,i)=>[{text:`${i+1}. ${String(r.text).slice(0,48)}`,callback_data:`idea_del:${i+1}`}]);k.push([{text:"🔙 بازگشت",callback_data:"ideas_inline"}]);return tgResponse(e,"editMessageText",{chat_id:c,message_id:mid,text:"🗑 <b>حذف ایده</b>\n\nایدهٔ موردنظر را انتخاب کنید:",parse_mode:"HTML",reply_markup:{inline_keyboard:k}})}if(data.startsWith("idea_del:")){const n=Number(data.split(":")[1]),rows=await ideaRows(e);if(!Number.isInteger(n)||n<1||n>rows.length)return renderIdeas(e,c,mid);await e.DB.prepare("DELETE FROM improvement_ideas WHERE id=?").bind(rows[n-1].id).run();return renderIdeas(e,c,mid)}return null}
 export default{async fetch(req,e){
   if(req.method!=="POST")return import("./index.js").then(mod=>mod.default.fetch(req,e));
-  let update;
-  try{update=await req.clone().json()}catch{return import("./index.js").then(mod=>mod.default.fetch(req,e))}
+  let update;try{update=await req.clone().json()}catch{return import("./index.js").then(mod=>mod.default.fetch(req,e))}
   const m=update.message,q=update.callback_query;
-  if(q?.data==="request_info"){
-    const r=q.message?.reply_to_message,o=r?.forward_origin,p=r?.text?parseLink(r.text):((o?.type==="channel"||o?.type==="channel_message")&&o.chat?.id!=null?{channel:o.chat?.username||o.chat?.id,post_id:o.message_id}:null);
-    if(p&&!isHomeChannel(p.channel)){
-      await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
-      return warning(e,q.message?.chat?.id,q.message?.message_id)
-    }
-  }
-  if(q?.data==="help"){
-    await trackUser(e,q.from?.id);
-    await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
-    return tgResponse(e,"editMessageText",{chat_id:q.message?.chat?.id,message_id:q.message?.message_id,text:guideText,parse_mode:"HTML",reply_markup:guideKeyboard});
-  }
-  if(q?.data==="public_list"||(q?.data==="list"&&isAdmin(e,q.from?.id))){
-    await trackUser(e,q.from?.id);
-    await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
-    return renderList(e,q.message?.chat?.id,1,q.data==="list",q.message?.message_id);
-  }
-  if(q?.data==="public_start"){
-    await trackUser(e,q.from?.id);
-    await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
-    return tgResponse(e,"editMessageText",{chat_id:q.message?.chat?.id,message_id:q.message?.message_id,text:startText,parse_mode:"HTML",reply_markup:startKeyboard});
-  }
-  if(q?.data?.startsWith("postlist:")){
-    const [,kind,page]=q.data.split(":");
-    const admin=kind==="admin";
-    if(admin&&!isAdmin(e,q.from?.id))return new Response("ok",{status:200});
-    await trackUser(e,q.from?.id);
-    await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
-    return renderList(e,q.message?.chat?.id,Number(page)||1,admin,q.message?.message_id);
-  }
-  if(m){
-    const p=parseLink(m.text||"");
-    const f=m.forward_origin?.type==="channel"||m.forward_origin?.type==="channel_message";
-    const ch=p?.channel||(f?(m.forward_origin.chat?.username||m.forward_origin.chat?.id):null);
-    if(ch&&!isHomeChannel(ch))return warning(e,m.chat?.id,m.message_id)
-  }
-  const mod=await import("./index.js");
-  return mod.default.fetch(new Request(req.url,{method:req.method,headers:req.headers,body:JSON.stringify(update)}),e)
+  if(q?.data==="request_info"){const r=q.message?.reply_to_message,o=r?.forward_origin,p=r?.text?parseLink(r.text):((o?.type==="channel"||o?.type==="channel_message")&&o.chat?.id!=null?{channel:o.chat?.username||o.chat?.id,post_id:o.message_id}:null);if(p&&!isHomeChannel(p.channel)){await tg(e,"answerCallbackQuery",{callback_query_id:q.id});return warning(e,q.message?.chat?.id,q.message?.message_id)}}
+  if(q?.data==="help"){await trackUser(e,q.from?.id);await tg(e,"answerCallbackQuery",{callback_query_id:q.id});return tgResponse(e,"editMessageText",{chat_id:q.message?.chat?.id,message_id:q.message?.message_id,text:guideText,parse_mode:"HTML",reply_markup:guideKeyboard})}
+  if(q?.data==="public_list"||(q?.data==="list"&&isAdmin(e,q.from?.id))){await trackUser(e,q.from?.id);await tg(e,"answerCallbackQuery",{callback_query_id:q.id});return renderList(e,q.message?.chat?.id,1,q.data==="list",q.message?.message_id)}
+  if(q?.data==="public_start"){await trackUser(e,q.from?.id);await tg(e,"answerCallbackQuery",{callback_query_id:q.id});return tgResponse(e,"editMessageText",{chat_id:q.message?.chat?.id,message_id:q.message?.message_id,text:startText,parse_mode:"HTML",reply_markup:startKeyboard})}
+  if(q?.data?.startsWith("postlist:")){const [,kind,page]=q.data.split(":");const admin=kind==="admin";if(admin&&!isAdmin(e,q.from?.id))return new Response("ok",{status:200});await trackUser(e,q.from?.id);await tg(e,"answerCallbackQuery",{callback_query_id:q.id});return renderList(e,q.message?.chat?.id,Number(page)||1,admin,q.message?.message_id)}
+  if(q?.data==="panel"&&isAdmin(e,q.from?.id)){await trackUser(e,q.from?.id);await tg(e,"answerCallbackQuery",{callback_query_id:q.id});return tgResponse(e,"editMessageText",{chat_id:q.message?.chat?.id,message_id:q.message?.message_id,text:adminPanelText,parse_mode:"HTML",reply_markup:adminPanelKeyboard})}
+  if(q?.data==="stats"&&isAdmin(e,q.from?.id))return editStats(e,q.message?.chat?.id,q.message?.message_id);
+  if(q?.data==="ideas"&&isAdmin(e,q.from?.id))return renderIdeas(e,q.message?.chat?.id,q.message?.message_id);
+  if(q?.data==="idea_add_inline"||q?.data==="idea_status_inline"||q?.data==="idea_delete_inline"||q?.data==="ideas_inline"||q?.data==="stats_inline"||q?.data?.startsWith("idea_choose:")||q?.data?.startsWith("idea_set:")||q?.data?.startsWith("idea_del:")){const r=await customIdeaCallback(e,q);if(r)return r}
+  if(m&&isAdmin(e,m.from?.id)){const s=await e.DB.prepare("SELECT * FROM sessions WHERE user_id=?").bind(m.from.id).first();if(s?.step==="CERCIS_IDEA_ENTRY"){const r=await customIdeaMessage(e,m,s);if(r)return r}}
+  if(m){const p=parseLink(m.text||"");const f=m.forward_origin?.type==="channel"||m.forward_origin?.type==="channel_message";const ch=p?.channel||(f?(m.forward_origin.chat?.username||m.forward_origin.chat?.id):null);if(ch&&!isHomeChannel(ch))return warning(e,m.chat?.id,m.message_id)}
+  const mod=await import("./index.js");return mod.default.fetch(new Request(req.url,{method:req.method,headers:req.headers,body:JSON.stringify(update)}),e)
 }};
