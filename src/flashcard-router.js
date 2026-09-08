@@ -16,7 +16,7 @@ export default {async fetch(req,env,ctx){
     const s=await env.DB.prepare("SELECT step FROM sessions WHERE user_id=?").bind(m.from.id).first();
     if(["FLASH_EDIT_LINK","FC_EDIT_TITLE","FC_EDIT_CARD_NAME","FC_EDIT_CARD_CONTENT","FC_EDIT_ADD_NAME","FC_EDIT_ADD_CONTENT"].includes(s?.step))return fedit.handleMessage(env,m);
     if(s?.step&&String(s.step).startsWith("BOOK_"))return abook.fetch(req,env,ctx);
-    if(["ADD_LINK","EDIT_LINK","BROADCAST","BROADCAST_CONFIRM"].includes(s?.step))return abook.fetch(req,env,ctx);
+    if(["ADD_LINK","ADD_FORM","EDIT_LINK","EDIT_FORM","BROADCAST","BROADCAST_CONFIRM"].includes(s?.step))return abook.fetch(req,env,ctx);
   }
   return app.fetch(req,env,ctx)
 }};
