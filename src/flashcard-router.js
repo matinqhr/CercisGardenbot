@@ -6,10 +6,6 @@ export default {async fetch(req,env,ctx){
   if(req.method!=="POST")return app.fetch(req,env,ctx);
   let u;try{u=await req.clone().json()}catch{return app.fetch(req,env,ctx)};
   const q=u?.callback_query,m=u?.message;
-  if(q&&String(q.data||"")==="flash_mode_book"){
-    const x={...u,callback_query:{...q,data:"add"}};
-    return abook.fetch(new Request(req.url,{method:"POST",headers:req.headers,body:JSON.stringify(x)}),env,ctx);
-  }
   if(q&&(String(q.data||"")==="public_list:0:0"||String(q.data||"").startsWith("flashpub:")))return flist.handle(env,q);
   if(q&&String(q.data||"").startsWith("fedit:"))return fedit.handleCallback(env,q);
   if(m?.from?.id){
