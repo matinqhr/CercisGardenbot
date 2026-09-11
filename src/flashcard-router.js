@@ -4,7 +4,7 @@ const resp=x=>new Response(JSON.stringify(x),{status:200,headers:{"content-type"
 const readParts=v=>{try{const x=JSON.parse(v||"[]");return Array.isArray(x)?x.filter(p=>p.text||p.media_file_id||p.rich_message):[]}catch{return[]}};
 const nav=(id,i,n)=>({inline_keyboard:[[{text:i>0?`‹ ${i}/${n}`:`• 1/${n}`,callback_data:i>0?`book:${id}:${i}`:"book_noop"},{text:i<n-1?`${i+2}/${n} ›`:`${n}/${n} •`,callback_data:i<n-1?`book:${id}:${i+2}`:"book_noop"}],[{text:"📖 فهرست پرونده",callback_data:`book_index:${id}`}]]});
 async function copyRichPage(env,chatId,p,index,total,replyTo,markup){
-  if(!p?.rich_message?.source_chat_id||!p.rich_message?.source_message_id)return null;
+  if(!p?.rich_message?.source_chat_id||!p.rich_message.source_message_id)return null;
   const body={chat_id:chatId,from_chat_id:p.rich_message.source_chat_id,message_id:p.rich_message.source_message_id,reply_markup:markup};
   if(replyTo)body.reply_parameters={message_id:replyTo};
   return resp(await tg(env,"copyMessage",body));
@@ -24,7 +24,7 @@ async function richCallback(env,q){
 async function richInputMessage(env,m,s){
   if(!m?.rich_message||!s?.step||!["ADD_FORM","EDIT_FORM"].includes(s.step))return null;
   const ps=readParts(s.draft_parts);
-  ps.push({rich_message:{...m.rich_message,source_chat_id:m.chat.id,source_message_id:m.message_id}});
+  ps.push({text:" ",rich_message:{...m.rich_message,source_chat_id:m.chat.id,source_message_id:m.message_id}});
   await env.DB.prepare("UPDATE sessions SET draft_parts=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(JSON.stringify(ps),m.from.id).run();
   const kind=s.step==="ADD_FORM"?"add":"edit";
   const markup={inline_keyboard:[[{text:kind==="add"?"📕 ثبت پرونده":"💾 ذخیره پرونده",callback_data:kind==="add"?"book_add_commit":"book_edit_commit"}],[{text:"🗑 پاک‌کردن بخش‌های دریافت‌شده",callback_data:kind==="add"?"book_add_restart":"book_edit_restart"}],[{text:"❌ لغو",callback_data:kind==="add"?"book_add_cancel":"book_edit_cancel"}],[{text:"🔙 پنل مدیریت",callback_data:"panel"}]]};
