@@ -1,5 +1,5 @@
 name = "cercisgardenbot"
-main = "src/stability-router.js"
+main = "src/forward-router.js"
 compatibility_date = "2026-08-22"
 
 [[d1_databases]]
