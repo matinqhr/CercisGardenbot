@@ -2,7 +2,7 @@ const tg=async(e,m,b={})=>(await fetch(`https://api.telegram.org/bot${e.BOT_TOKE
 const out=x=>new Response(JSON.stringify(x),{status:200,headers:{"content-type":"application/json"}});
 const admin=(e,id)=>String(e.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean).includes(String(id));
 const esc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
-const edit=(e,q,text,markup)=>out(tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text,parse_mode:"HTML",reply_markup:markup}));
+const edit=async(e,q,text,markup)=>out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text,parse_mode:"HTML",reply_markup:markup}));
 const HOME='<a href="https://t.me/Arghavanplaylistt">𝐇𝐨𝐦𝐞</a>';
 const guide=`📚 <b>راهنمای کتابخانه</b>\n\nلینک یا خودِ پستی را که از کانال ${HOME} دریافت کرده‌اید برای من ارسال کنید.\n\nمن فقط اطلاعات پست‌های ثبت‌شده در آرشیو ${HOME} را ارائه می‌کنم.\n\nلطفاً فقط پست‌های ${HOME} را ارسال کنید.`;
 async function ensureCompat(e){
