@@ -17,15 +17,16 @@ async function hasActiveAdminSession(e,id){
   if(!admin(e,id))return false;
   try{const s=await e.DB.prepare("SELECT step,updated_at FROM sessions WHERE user_id=?").bind(id).first();if(!s?.step)return false;if(!s.updated_at)return true;const t=Date.parse(String(s.updated_at).replace(" ","T")+"Z");return !Number.isNaN(t)&&Date.now()-t<30*60*1000}catch{return false}
 }
+function normalizedLink(p){return p?`https://t.me/${p.channel}/${p.post_id}`:null}
 async function route(req,e,ctx,u){
   const m=u?.message;
   if(!m)return import("./stability-router.js").then(x=>x.default.fetch(req,e,ctx));
   const direct=link(m.text||m.caption||"");
   const forwarded=forwardedLink(m);
-  const synthetic=forwarded?{...u,message:{...m,text:forwarded,entities:[]}}:null;
-  const patched=synthetic?new Request(req.url,{method:"POST",headers:req.headers,body:JSON.stringify(synthetic)}):req;
+  const publicLink=normalizedLink(direct)||forwarded;
+  const patched=publicLink?new Request(req.url,{method:"POST",headers:req.headers,body:JSON.stringify({...u,message:{...m,text:publicLink,entities:[]}})}):req;
   const active=await hasActiveAdminSession(e,m.from?.id);
-  if((direct||forwarded)&&!active){
+  if(publicLink&&!active){
     return import("./final-book-gate.js").then(x=>x.default.fetch(patched,e,ctx));
   }
   return import("./stability-router.js").then(x=>x.default.fetch(patched,e,ctx));
