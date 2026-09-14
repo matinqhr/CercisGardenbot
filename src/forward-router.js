@@ -9,7 +9,9 @@ const startKeyboard={inline_keyboard:[[{text:"📚 راهنما",callback_data:"
 const sendStart=async(e,m)=>out(await tg(e,"sendMessage",{chat_id:m?.chat?.id,text:startText,parse_mode:"HTML",reply_markup:startKeyboard}));
 async function hasActiveAdminSession(e,id){if(!admin(e,id))return false;try{const s=await e.DB.prepare("SELECT step,updated_at FROM sessions WHERE user_id=?").bind(id).first();if(!s?.step)return false;if(!s.updated_at)return true;const t=Date.parse(String(s.updated_at).replace(" ","T")+"Z");return !Number.isNaN(t)&&Date.now()-t<30*60*1000}catch{return false}}
 const publicHelpText=`📚 <b>راهنمای کتابخانه</b>\n\nلینک یا خودِ پستی را که از کانال ${HOME} دریافت کرده‌اید برای من ارسال کنید.\n\nمن فقط اطلاعات پست‌های ثبت‌شده در آرشیو ${HOME} را ارائه می‌کنم.\n\nلطفاً فقط پست‌های ${HOME} را ارسال کنید.`;
-async function publicList(e,c,mid){try{const rows=(await e.DB.prepare("SELECT id,url,title FROM tracks ORDER BY id DESC").all()).results||[];if(!rows.length){const b={chat_id:c,text:"📜 <b>فهرست پرونده‌های ثبت‌شده</b>\n\nهنوز هیچ پرونده‌ای ثبت نشده است.",parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:"🔙 منوی اصلی",callback_data:"public_start"}]]}};if(mid){const r=await tg(e,"editMessageText",{chat_id:c,message_id:mid,...b});if(r?.ok)return r}return tg(e,"sendMessage",b)}let t="📜 <b>فهرست پرونده‌های ثبت‌شده</b>\n\n";let first=true;for(let i=0;i<rows.length;i++){const r=rows[i],title=String(r.title||`پرونده #${r.id}`).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),url=String(r.url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;"),x=`${i+1}. 🏷️ <b>${title}</b>\n🔗 <a href="${url}">مشاهده پست اصلی</a>\n\n`;if((t+x).length>3800){if(first&&mid){const r0=await tg(e,"editMessageText",{chat_id:c,message_id:mid,text:t,parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:"🔙 منوی اصلی",callback_data:"public_start"}]]}});if(!r0?.ok)await tg(e,"sendMessage",{chat_id:c,text:t,parse_mode:"HTML"})}else await tg(e,"sendMessage",{chat_id:c,text:t,parse_mode:"HTML"});first=false;t="📜 <b>ادامه فهرست</b>\n\n"}t+=x}if(first&&mid){const r0=await tg(e,"editMessageText",{chat_id:c,message_id:mid,text:t,parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:"🔙 منوی اصلی",callback_data:"public_start"}]]}});if(r0?.ok)return r0}return tg(e,"sendMessage",{chat_id:c,text:t,parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:"🔙 منوی اصلی",callback_data:"public_start"}]]}})}catch(err){console.error("[CERCIS_PUBLIC_LIST]",err);const text="⚠️ در حال حاضر امکان نمایش فهرست پرونده‌ها وجود ندارد.\n\nلطفاً کمی بعد دوباره تلاش کنید.";if(mid){const r=await tg(e,"editMessageText",{chat_id:c,message_id:mid,text,reply_markup:{inline_keyboard:[[{text:"🔙 منوی اصلی",callback_data:"public_start"}]]}});if(r?.ok)return r}return tg(e,"sendMessage",{chat_id:c,text})}}
+const esc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+function publicListKeyboard(page,total){const row=[];if(page>0)row.push({text:"‹ قبلی",callback_data:`public_list:${page-1}`});else row.push({text:"• ۱",callback_data:"public_list_noop"});if(page<total-1)row.push({text:"بعدی ›",callback_data:`public_list:${page+1}`});else row.push({text:`${total} •`,callback_data:"public_list_noop"});return{inline_keyboard:[row,[{text:"🔙 منوی اصلی",callback_data:"public_start"}]]}}
+async function publicList(e,c,mid,page=0){try{const rows=(await e.DB.prepare("SELECT id,url,title FROM tracks ORDER BY id DESC").all()).results||[];if(!rows.length){const b={chat_id:c,text:"📜 <b>فهرست پرونده‌های ثبت‌شده</b>\n\nهنوز هیچ پرونده‌ای ثبت نشده است.",parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:"🔙 منوی اصلی",callback_data:"public_start"}]]}};if(mid){const r=await tg(e,"editMessageText",{chat_id:c,message_id:mid,...b});if(r?.ok)return r}return tg(e,"sendMessage",b)}const size=15,total=Math.max(1,Math.ceil(rows.length/size)),p=Math.min(Math.max(Number(page)||0,0),total-1),chunk=rows.slice(p*size,(p+1)*size);let t=`📜 <b>فهرست پرونده‌های ثبت‌شده</b>\n\n📖 صفحه ${p+1} از ${total}\n📚 تعداد کل: <b>${rows.length}</b>\n\n`;for(let i=0;i<chunk.length;i++){const r=chunk[i],n=p*size+i+1,title=esc(r.title||`پرونده #${r.id}`);t+=`${n}. 🏷️ <b>${title}</b>\n🔗 <a href="${esc(r.url)}">مشاهده پست اصلی</a>\n\n`}const b={chat_id:c,message_id:mid,text:t,parse_mode:"HTML",reply_markup:publicListKeyboard(p,total)};if(mid){const r=await tg(e,"editMessageText",b);if(r?.ok)return r}delete b.message_id;return tg(e,"sendMessage",b)}catch(err){console.error("[CERCIS_PUBLIC_LIST]",err);const text="⚠️ در حال حاضر امکان نمایش فهرست پرونده‌ها وجود ندارد.\n\nلطفاً کمی بعد دوباره تلاش کنید.";if(mid){const r=await tg(e,"editMessageText",{chat_id:c,message_id:mid,text,reply_markup:{inline_keyboard:[[{text:"🔙 منوی اصلی",callback_data:"public_start"}]]}});if(r?.ok)return r}return tg(e,"sendMessage",{chat_id:c,text})}}
 async function routeCallback(req,e,ctx,u){
   const q=u?.callback_query;
   if(!q)return null;
@@ -28,7 +30,11 @@ async function routeCallback(req,e,ctx,u){
   }
   if(d==="public_list"||d.startsWith("public_list:")){
     await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
-    return out(await publicList(e,q.message?.chat?.id,q.message?.message_id));
+    return out(await publicList(e,q.message?.chat?.id,q.message?.message_id,d.includes(":")?Number(d.split(":")[1]):0));
+  }
+  if(d==="public_list_noop"){
+    await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+    return out({ok:true});
   }
   if(d.startsWith("flash:")||d.startsWith("flash_index:")||d==="flash_noop")return import("./flashcard-gate.js").then(x=>x.default.fetch(req,e,ctx));
   if(d.startsWith("book:")||d.startsWith("book_index:")||d==="book_noop")return import("./public-book-gate.js").then(x=>x.default.fetch(req,e,ctx));
@@ -44,7 +50,7 @@ async function route(req,e,ctx,u){
   const text=String(m.text||"").trim();
   if(text==="/start")return sendStart(e,m);
   if(text==="/admin"){
-    if(!admin(e,m.from?.id))return out(await tg(e,"sendMessage",{chat_id:m.chat?.id,text:"⚠️ <b>دسترسی ندارید.</b>",parse_mode:"HTML"}));
+    if(!admin(e,m.from?.id))return out(await tg(e,"sendMessage",{chat_id:m?.chat?.id,text:"⚠️ <b>دسترسی ندارید.</b>",parse_mode:"HTML"}));
     return import("./home-gate.js").then(x=>x.default.fetch(req,e,ctx));
   }
   const direct=link(m.text||m.caption||"");
