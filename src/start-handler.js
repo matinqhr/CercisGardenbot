@@ -1,0 +1,11 @@
+const tg=async(e,m,b={})=>(await fetch(`https://api.telegram.org/bot${e.BOT_TOKEN}/${m}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)})).json();
+const out=x=>new Response(JSON.stringify(x),{status:200,headers:{"content-type":"application/json"}});
+const admin=(e,id)=>String(e.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean).includes(String(id));
+const HOME='<a href="https://t.me/Arghavanplaylistt">𝐇𝐨𝐦𝐞</a>';
+const GUIDE="https://telegra.ph/Cercis-08-27";
+const startText=`🌳 <b>Cercis Garden</b>\n\nکتابخانه‌ای از اطلاعات پست‌های ${HOME}.\n\nلینک یا خودِ پستی را که از ${HOME} دریافت کرده‌اید برای من ارسال کنید.`;
+const guideText=`📚 <b>راهنمای کتابخانه</b>\n\nلینک یا خودِ پستی را که از کانال ${HOME} دریافت کرده‌اید برای من ارسال کنید.\n\nمن فقط اطلاعات پست‌های ثبت‌شده در آرشیو ${HOME} را ارائه می‌کنم.\n\nلطفاً فقط پست‌های ${HOME} را ارسال کنید.`;
+const startKeyboard=(isAdmin=false)=>({inline_keyboard:[[{text:"📚 راهنما",callback_data:"help"}],[{text:"ℹ️ درباره ربات",url:GUIDE}],[{text:"📜 فهرست پست‌های ثبت‌شده",callback_data:"public_list"}],...(isAdmin?[[{text:"👑 پنل مدیریت",callback_data:"panel"}]]:[])]});
+const sendStart=async(e,m)=>out(await tg(e,"sendMessage",{chat_id:m?.chat?.id,text:startText,parse_mode:"HTML",reply_markup:startKeyboard(admin(e,m?.from?.id))}));
+const edit=async(e,q,text,markup)=>{const r=await tg(e,"editMessageText",{chat_id:q?.message?.chat?.id,message_id:q?.message?.message_id,text,parse_mode:"HTML",reply_markup:markup});if(r?.ok)return r;return tg(e,"sendMessage",{chat_id:q?.message?.chat?.id,text,parse_mode:"HTML",reply_markup:markup})};
+export default{async fetch(req,e){let u;try{u=await req.clone().json()}catch{return out({ok:true})}const m=u?.message,q=u?.callback_query;if(m?.text?.trim()==="/start")return sendStart(e,m);if(q){const d=String(q.data||"");if(d==="help"){await tg(e,"answerCallbackQuery",{callback_query_id:q.id});return out(await edit(e,q,guideText,{inline_keyboard:[[{text:"🔙 منوی اصلی",callback_data:"public_start"}]]}))}if(d==="public_start"){await tg(e,"answerCallbackQuery",{callback_query_id:q.id});return out(await edit(e,q,startText,startKeyboard(admin(e,q.from?.id))))}}return out({ok:true})}};
