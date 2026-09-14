@@ -6,7 +6,8 @@ const forwardedLink=m=>{const o=m?.forward_origin;if(o&&(o.type==="channel"||o.t
 const startText=`🌳 <b>Cercis Garden</b>\n\nکتابخانه‌ای از اطلاعات پست‌های <a href="https://t.me/Arghavanplaylistt">𝐇𝐨𝐦𝐞</a>.\n\nلینک یا خودِ پستی را که از 𝐇𝐨𝐦𝐞 دریافت کرده‌اید برای من ارسال کنید.`;
 const startKeyboard={inline_keyboard:[[{text:"📚 راهنما",callback_data:"help"}],[{text:"ℹ️ درباره ربات",url:"https://telegra.ph/Cercis-08-27"}],[{text:"📜 فهرست پست‌های ثبت‌شده",callback_data:"public_list"}]]};
 const sendStart=async(e,m)=>out(await tg(e,"sendMessage",{chat_id:m?.chat?.id,text:startText,parse_mode:"HTML",reply_markup:startKeyboard}));
-async function hasActiveAdminSession(e,id){if(!admin(e,id))return false;try{const s=await e.DB.prepare("SELECT step,updated_at FROM sessions WHERE user_id=?").bind(id).first();if(!s?.step)return false;if(!s.updated_at)return true;const t=Date.parse(String(s.updated_at).replace(" ","T")+"Z");return !Number.isNaN(t)&&Date.now()-t<30*60*1000}catch{return false}}
+const publicHelpText=`📚 <b>راهنمای کتابخانه</b>\n\nلینک یا خودِ پستی را که از کانال <a href="https://t.me/Arghavanplaylistt">𝐇𝐨𝐦𝐞</a> دریافت کرده‌اید برای من ارسال کنید.\n\nمن فقط اطلاعات پست‌های ثبت‌شده در آرشیو 𝐇𝐨𝐦𝐞 را ارائه می‌کنم.\n\nلطفاً فقط پست‌های 𝐇𝐨𝐦𝐞 را ارسال کنید.`;
+async function publicList(e,c){try{const rows=(await e.DB.prepare("SELECT id,url,title FROM tracks ORDER BY id DESC").all()).results||[];if(!rows.length)return tg(e,"sendMessage",{chat_id:c,text:"📜 <b>فهرست پرونده‌های ثبت‌شده</b>\n\nهنوز هیچ پرونده‌ای ثبت نشده است.",parse_mode:"HTML"});let t="📜 <b>فهرست پرونده‌های ثبت‌شده</b>\n\n";for(let i=0;i<rows.length;i++){const r=rows[i],title=String(r.title||`پرونده #${r.id}`).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),url=String(r.url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;");const x=`${i+1}. 🏷️ <b>${title}</b>\n🔗 <a href="${url}">مشاهده پست اصلی</a>\n\n`;if((t+x).length>3800){await tg(e,"sendMessage",{chat_id:c,text:t,parse_mode:"HTML"});t="📜 <b>ادامه فهرست</b>\n\n"}t+=x}return tg(e,"sendMessage",{chat_id:c,text:t,parse_mode:"HTML"})}catch(err){return tg(e,"sendMessage",{chat_id:c,text:"⚠️ در حال حاضر امکان نمایش فهرست پرونده‌ها وجود ندارد.\n\nلطفاً کمی بعد دوباره تلاش کنید."})}}
 async function routeCallback(req,e,ctx,u){
   const q=u?.callback_query;
   if(!q)return null;
@@ -15,13 +16,17 @@ async function routeCallback(req,e,ctx,u){
   const d=String(q.data||"");
   if(d==="help"){
     await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
-    return out(await tg(e,"editMessageText",{chat_id:q.message?.chat?.id,message_id:q.message?.message_id,text:"📚 <b>راهنمای کتابخانه</b>\n\nلینک یا خودِ پستی را که از کانال <a href=\"https://t.me/Arghavanplaylistt\">𝐇𝐨𝐦𝐞</a> دریافت کرده‌اید برای من ارسال کنید.\n\nمن فقط اطلاعات پست‌های ثبت‌شده در آرشیو 𝐇𝐨𝐦𝐞 را ارائه می‌کنم.\n\nلطفاً فقط پست‌های 𝐇𝐨𝐦𝐞 را ارسال کنید.",parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:"🔙 منوی اصلی",callback_data:"public_start"}]]}}));
+    return out(await tg(e,"sendMessage",{chat_id:q.message?.chat?.id,text:publicHelpText,parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:"🔙 منوی اصلی",callback_data:"public_start"}]]}}));
   }
   if(d==="public_start"){
     await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
-    return out(await tg(e,"editMessageText",{chat_id:q.message?.chat?.id,message_id:q.message?.message_id,text:startText,parse_mode:"HTML",reply_markup:startKeyboard}));
+    return out(await tg(e,"sendMessage",{chat_id:q.message?.chat?.id,text:startText,parse_mode:"HTML",reply_markup:startKeyboard}));
   }
-  if(d==="public_list"||d==="request_info")return import("./home-gate.js").then(x=>x.default.fetch(req,e,ctx));
+  if(d==="public_list"){
+    await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+    return out(await publicList(e,q.message?.chat?.id));
+  }
+  if(d==="request_info")return import("./home-gate.js").then(x=>x.default.fetch(req,e,ctx));
   return out({ok:true});
 }
 async function route(req,e,ctx,u){
