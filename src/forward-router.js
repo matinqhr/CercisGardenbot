@@ -7,9 +7,28 @@ const startText=`🌳 <b>Cercis Garden</b>\n\nکتابخانه‌ای از اط�
 const startKeyboard={inline_keyboard:[[{text:"📚 راهنما",callback_data:"help"}],[{text:"ℹ️ درباره ربات",url:"https://telegra.ph/Cercis-08-27"}],[{text:"📜 فهرست پست‌های ثبت‌شده",callback_data:"public_list"}]]};
 const sendStart=async(e,m)=>out(await tg(e,"sendMessage",{chat_id:m?.chat?.id,text:startText,parse_mode:"HTML",reply_markup:startKeyboard}));
 async function hasActiveAdminSession(e,id){if(!admin(e,id))return false;try{const s=await e.DB.prepare("SELECT step,updated_at FROM sessions WHERE user_id=?").bind(id).first();if(!s?.step)return false;if(!s.updated_at)return true;const t=Date.parse(String(s.updated_at).replace(" ","T")+"Z");return !Number.isNaN(t)&&Date.now()-t<30*60*1000}catch{return false}}
+async function routeCallback(req,e,ctx,u){
+  const q=u?.callback_query;
+  if(!q)return null;
+  const id=q.from?.id;
+  if(admin(e,id))return import("./stability-router.js").then(x=>x.default.fetch(req,e,ctx));
+  const d=String(q.data||"");
+  if(d==="help"){
+    await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+    return out(await tg(e,"editMessageText",{chat_id:q.message?.chat?.id,message_id:q.message?.message_id,text:"📚 <b>راهنمای کتابخانه</b>\n\nلینک یا خودِ پستی را که از کانال <a href=\"https://t.me/Arghavanplaylistt\">𝐇𝐨𝐦𝐞</a> دریافت کرده‌اید برای من ارسال کنید.\n\nمن فقط اطلاعات پست‌های ثبت‌شده در آرشیو 𝐇𝐨𝐦𝐞 را ارائه می‌کنم.\n\nلطفاً فقط پست‌های 𝐇𝐨𝐦𝐞 را ارسال کنید.",parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:"🔙 منوی اصلی",callback_data:"public_start"}]]}}));
+  }
+  if(d==="public_start"){
+    await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+    return out(await tg(e,"editMessageText",{chat_id:q.message?.chat?.id,message_id:q.message?.message_id,text:startText,parse_mode:"HTML",reply_markup:startKeyboard}));
+  }
+  if(d==="public_list"||d==="request_info")return import("./home-gate.js").then(x=>x.default.fetch(req,e,ctx));
+  return out({ok:true});
+}
 async function route(req,e,ctx,u){
+  const cb=await routeCallback(req,e,ctx,u);
+  if(cb)return cb;
   const m=u?.message;
-  if(!m)return import("./stability-router.js").then(x=>x.default.fetch(req,e,ctx));
+  if(!m)return out({ok:true});
   if(String(m.text||"").trim()==="/start")return sendStart(e,m);
   const direct=link(m.text||m.caption||"");
   const forwarded=forwardedLink(m);
@@ -21,9 +40,7 @@ async function route(req,e,ctx,u){
   return import("./stability-router.js").then(x=>x.default.fetch(patched,e,ctx));
 }
 export default{async fetch(req,e,ctx){
-  if(req.method!=="POST")return import("./stability-router.js").then(m=>m.default.fetch(req,e,ctx));
-  let u;try{u=await req.clone().json()}catch{return import("./stability-router.js").then(m=>m.default.fetch(req,e,ctx))}
-  const m=u?.message;
-  if(m&&String(m.text||"").trim()==="/start")return sendStart(e,m);
+  if(req.method!=="POST")return out({ok:true});
+  let u;try{u=await req.clone().json()}catch{return out({ok:true})}
   return route(req,e,ctx,u)
 }};
