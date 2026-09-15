@@ -10,9 +10,7 @@ async function stats(e,q){
   const users=await n(e,"SELECT COUNT(*) n FROM users");
   const tracks=await n(e,"SELECT COUNT(*) n FROM tracks");
   const flashTracks=await n(e,"SELECT COUNT(*) n FROM tracks WHERE display_mode='flashcard'");
-  const cards=await n(e,"SELECT COUNT(*) n FROM flashcards");
   const sessions=await n(e,"SELECT COUNT(*) n FROM sessions WHERE step IS NOT NULL AND TRIM(step)!='' AND (updated_at IS NULL OR updated_at >= datetime('now','-30 minutes'))");
-  const ideas=await n(e,"SELECT COUNT(*) n FROM improvement_ideas");
   const pendingShortcomings=await n(e,"SELECT COUNT(*) n FROM improvement_ideas WHERE COALESCE(status,'backlog')='backlog'");
   const activities=await n(e,"SELECT COALESCE(SUM(count),0) n FROM usage_stats");
   const requests=await n(e,"SELECT COUNT(*) n FROM information_requests WHERE status='pending'");
@@ -23,11 +21,9 @@ async function stats(e,q){
     `👥 <b>کاربران</b>: ${users}\n`+
     `📚 <b>پرونده‌های ثبت‌شده</b>: ${tracks}\n`+
     `🃏 <b>پرونده‌های فلش‌کارتی</b>: ${flashTracks}\n`+
-    `📝 <b>تعداد کارت‌های فلش‌کارت</b>: ${cards}\n`+
     `⚡ <b>کل فعالیت‌های ثبت‌شده</b>: ${activities}\n`+
     `📩 <b>درخواست‌های ثبت اطلاعات فعال</b>: ${requests}\n`+
     `🟡 <b>نشست‌های فعال</b>: ${sessions}\n`+
-    `🌱 <b>ایده‌ها و کاستی‌ها</b>: ${ideas}\n`+
     `⏳ <b>کاستی‌های در انتظار بررسی</b>: ${pendingShortcomings}\n\n`+
     `🏆 <b>سه پرونده با بیشترین فعالیت</b>\n\n${top}`;
   return edit(e,q,text,{inline_keyboard:[[{text:"🔄 به‌روزرسانی آمار",callback_data:"stats"}],[{text:"🔙 پنل مدیریت",callback_data:"panel"}]]})
