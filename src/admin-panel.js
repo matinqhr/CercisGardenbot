@@ -13,8 +13,9 @@ async function stats(e,q){
   const cards=await n(e,"SELECT COUNT(*) n FROM flashcards");
   const sessions=await n(e,"SELECT COUNT(*) n FROM sessions WHERE step IS NOT NULL AND TRIM(step)!='' AND (updated_at IS NULL OR updated_at >= datetime('now','-30 minutes'))");
   const ideas=await n(e,"SELECT COUNT(*) n FROM improvement_ideas");
+  const pendingShortcomings=await n(e,"SELECT COUNT(*) n FROM improvement_ideas WHERE COALESCE(status,'backlog')='backlog'");
   const activities=await n(e,"SELECT COALESCE(SUM(count),0) n FROM usage_stats");
-  const requests=await n(e,"SELECT COUNT(*) n FROM information_requests");
+  const requests=await n(e,"SELECT COUNT(*) n FROM information_requests WHERE status='pending'");
   const posts=await qall(e,"SELECT t.id,t.title,t.url,COALESCE(SUM(s.count),0) activity FROM tracks t LEFT JOIN usage_stats s ON s.key='post:'||t.id GROUP BY t.id,t.title,t.url ORDER BY activity DESC,t.id DESC LIMIT 3");
   const medals=["🥇","🥈","🥉"];
   const top=posts.length?posts.map((r,i)=>`${medals[i]} <b>${esc(r.title||`پرونده #${r.id}`)}</b> — <b>${Number(r.activity||0)}</b> فعالیت\n🔗 <a href="${esc(r.url||"")}">مشاهده پست اصلی</a>`).join("\n\n"):"هنوز فعالیتی برای رتبه‌بندی ثبت نشده است.";
@@ -24,9 +25,10 @@ async function stats(e,q){
     `🃏 <b>پرونده‌های فلش‌کارتی</b>: ${flashTracks}\n`+
     `📝 <b>تعداد کارت‌های فلش‌کارت</b>: ${cards}\n`+
     `⚡ <b>کل فعالیت‌های ثبت‌شده</b>: ${activities}\n`+
-    `📩 <b>درخواست‌های ثبت اطلاعات</b>: ${requests}\n`+
+    `📩 <b>درخواست‌های ثبت اطلاعات فعال</b>: ${requests}\n`+
     `🟡 <b>نشست‌های فعال</b>: ${sessions}\n`+
-    `🌱 <b>ایده‌ها و کاستی‌ها</b>: ${ideas}\n\n`+
+    `🌱 <b>ایده‌ها و کاستی‌ها</b>: ${ideas}\n`+
+    `⏳ <b>کاستی‌های در انتظار بررسی</b>: ${pendingShortcomings}\n\n`+
     `🏆 <b>سه پرونده با بیشترین فعالیت</b>\n\n${top}`;
   return edit(e,q,text,{inline_keyboard:[[{text:"🔄 به‌روزرسانی آمار",callback_data:"stats"}],[{text:"🔙 پنل مدیریت",callback_data:"panel"}]]})
 }
