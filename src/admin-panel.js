@@ -12,7 +12,6 @@ async function stats(e,q){
   const flashTracks=await n(e,"SELECT COUNT(*) n FROM tracks WHERE display_mode='flashcard'");
   const sessions=await n(e,"SELECT COUNT(*) n FROM sessions WHERE step IS NOT NULL AND TRIM(step)!='' AND (updated_at IS NULL OR updated_at >= datetime('now','-30 minutes'))");
   const pendingShortcomings=await n(e,"SELECT COUNT(*) n FROM improvement_ideas WHERE COALESCE(status,'backlog')='backlog'");
-  const activities=await n(e,"SELECT COALESCE(SUM(count),0) n FROM usage_stats");
   const requests=await n(e,"SELECT COUNT(*) n FROM information_requests WHERE status='pending'");
   const posts=await qall(e,"SELECT t.id,t.title,t.url,COALESCE(SUM(s.count),0) activity FROM tracks t LEFT JOIN usage_stats s ON s.key='post:'||t.id GROUP BY t.id,t.title,t.url ORDER BY activity DESC,t.id DESC LIMIT 3");
   const medals=["🥇","🥈","🥉"];
@@ -21,7 +20,6 @@ async function stats(e,q){
     `👥 <b>کاربران</b>: ${users}\n`+
     `📚 <b>پرونده‌های ثبت‌شده</b>: ${tracks}\n`+
     `🃏 <b>پرونده‌های فلش‌کارتی</b>: ${flashTracks}\n`+
-    `⚡ <b>کل فعالیت‌های ثبت‌شده</b>: ${activities}\n`+
     `📩 <b>درخواست‌های ثبت اطلاعات فعال</b>: ${requests}\n`+
     `🟡 <b>نشست‌های فعال</b>: ${sessions}\n`+
     `⏳ <b>کاستی‌های در انتظار بررسی</b>: ${pendingShortcomings}\n\n`+
@@ -29,4 +27,4 @@ async function stats(e,q){
   return edit(e,q,text,{inline_keyboard:[[{text:"🔄 به‌روزرسانی آمار",callback_data:"stats"}],[{text:"🔙 پنل مدیریت",callback_data:"panel"}]]})
 }
 async function edit(e,q,text,markup){const r=await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text,parse_mode:"HTML",reply_markup:markup});return resp(r)}
-export default{async fetch(req,e){let u;try{u=await req.clone().json()}catch{return new Response("ok")};const q=u?.callback_query,m=u?.message,id=q?.from?.id||m?.from?.id;if(!admin(e,id))return new Response("ok");const c=q?.message?.chat?.id||m?.chat?.id,mid=q?.message?.message_id;if(q?.id)await tg(e,"answerCallbackQuery",{callback_query_id:q.id});if(q?.data==="stats"||q?.data==="stats_inline")return stats(e,q);const body={chat_id:c,text:"👑 <b>پنل مدیریت 𝐂𝐞𝐫𝐜𝐢𝐬🤖</b>",parse_mode:"HTML",reply_markup:panel};if(q?.id)return resp(await tg(e,"editMessageText",{...body,message_id:mid}));return resp(await tg(e,"sendMessage",body))}};
+export default{async fetch(req,e){let u;try{u=await req.clone().json()}catch{return new Response("ok")};const q=u?.callback_query,m=u?.message,id=q?.from?.id||m?.from?.id;if(!admin(e,id))return new Response("ok");const c=q?.message?.chat?.id||m?.chat?.id,mid=q?.message?.message_id;if(q?.id)await tg(e,"answerCallbackQuery",{callback_query_id:q.id});if(q?.data==="stats"||q?.data==="stats_inline")return stats(e,q);if(q?.data==="panel")return resp(await tg(e,"editMessageText",{chat_id:c,message_id:mid,text:"👑 <b>پنل مدیریت 𝐂𝐞𝐫𝐜𝐢𝐬🤖</b>",parse_mode:"HTML",reply_markup:panel}));const body={chat_id:c,text:"👑 <b>پنل مدیریت 𝐂𝐞𝐫𝐜𝐢𝐬🤖</b>",parse_mode:"HTML",reply_markup:panel};if(q?.id)return resp(await tg(e,"editMessageText",{...body,message_id:mid}));return resp(await tg(e,"sendMessage",body))}};
