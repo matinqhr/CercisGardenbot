@@ -5,6 +5,20 @@ export class LoadingScene extends Phaser.Scene {
     super('LoadingScene');
   }
 
+  preload(): void {
+    const meadowSheetUrl = new URL(
+      '../../assets/sheets/MeadowSpriteSheet.png',
+      import.meta.url
+    ).href;
+
+    this.load.spritesheet('meadow', meadowSheetUrl, {
+      frameWidth: 32,
+      frameHeight: 32,
+      spacing: 0,
+      margin: 0
+    });
+  }
+
   create(): void {
     const { width, height } = this.scale;
 
