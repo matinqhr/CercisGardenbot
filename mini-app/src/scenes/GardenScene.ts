@@ -10,19 +10,22 @@ type GardenObject = {
 };
 
 const GARDEN_OBJECTS: GardenObject[] = [
-  { kind: 'tree', col: 7, row: 7, frame: 39 },
-  { kind: 'tree', col: 19, row: 8, frame: 48 },
-  { kind: 'tree', col: 22, row: 18, frame: 48 },
-  { kind: 'bush', col: 16, row: 14, frame: 35 },
-  { kind: 'bush', col: 11, row: 17, frame: 36 },
+  { kind: 'tree', col: 6, row: 7, frame: 48 },
+  { kind: 'tree', col: 21, row: 8, frame: 48 },
+  { kind: 'tree', col: 23, row: 18, frame: 48 },
+  { kind: 'tree', col: 8, row: 22, frame: 48 },
+  { kind: 'bush', col: 15, row: 13, frame: 35 },
+  { kind: 'bush', col: 16, row: 14, frame: 36 },
+  { kind: 'bush', col: 11, row: 17, frame: 35 },
   { kind: 'flower', col: 13, row: 10, frame: 26 },
-  { kind: 'flower', col: 15, row: 11, frame: 27 },
-  { kind: 'flower', col: 11, row: 15, frame: 28 },
-  { kind: 'rock', col: 20, row: 12, frame: 33 },
-  { kind: 'rock', col: 21, row: 13, frame: 34 },
+  { kind: 'flower', col: 14, row: 10, frame: 27 },
+  { kind: 'flower', col: 15, row: 11, frame: 28 },
+  { kind: 'rock', col: 19, row: 12, frame: 33 },
+  { kind: 'rock', col: 20, row: 12, frame: 34 },
   { kind: 'tuft', col: 9, row: 18, frame: 37 },
-  { kind: 'tuft', col: 18, row: 20, frame: 38 },
-  { kind: 'log', col: 5, row: 23, frame: 29 }
+  { kind: 'tuft', col: 10, row: 18, frame: 38 },
+  { kind: 'tuft', col: 18, row: 20, frame: 37 },
+  { kind: 'log', col: 6, row: 23, frame: 29 }
 ];
 
 export class GardenScene extends Phaser.Scene {
@@ -73,34 +76,51 @@ export class GardenScene extends Phaser.Scene {
           row >= this.landOffset &&
           row < this.landOffset + this.landSize;
 
-        const object = objectMap.get(this.cellKey(col, row));
-        const frame = object?.frame ?? this.getTerrainFrame(insideLand, col, row);
-
-        const tile = this.add.image(p.x, p.y, this.tileKey, frame)
+        const terrain = this.add.image(
+          p.x,
+          p.y,
+          this.tileKey,
+          this.getTerrainFrame(insideLand, col, row)
+        )
           .setOrigin(0.5, 1)
           .setDepth(row + col);
 
-        world.add(tile);
+        world.add(terrain);
 
-        if (object) {
-          tile.setInteractive({ useHandCursor: true });
-          tile.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-            pointer.event.stopPropagation();
-            this.showMessage(this.objectLabel(object.kind));
-          });
+        const object = objectMap.get(this.cellKey(col, row));
+        if (!object) {
+          continue;
         }
+
+        // Object frames are transparent overlays in the supplied sheet.
+        // They must sit on top of the terrain tile instead of replacing it.
+        const sprite = this.add.image(p.x, p.y, this.tileKey, object.frame)
+          .setOrigin(0.5, 1)
+          .setDepth(row + col + 0.1)
+          .setInteractive({ useHandCursor: true });
+
+        sprite.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+          pointer.event.stopPropagation();
+          this.showMessage(this.objectLabel(object.kind));
+        });
+
+        world.add(sprite);
       }
     }
   }
 
   private getTerrainFrame(insideLand: boolean, col: number, row: number): number {
     if (insideLand) {
-      // First row of the supplied sheet: eight compatible grass variants.
-      return 8 + ((col * 3 + row * 5) % 8);
+      // Frames 8–15 are the eight grass tiles from the supplied isometric sheet.
+      // Use a deterministic hash so the pattern feels organic rather than striped.
+      const hash = (col * 73856093) ^ (row * 19349663);
+      return 8 + (Math.abs(hash) % 8);
     }
 
-    // Lower rows contain the dirt/soil variants used to frame the plot.
-    return 49 + ((col + row) % 7);
+    // Frames 57–63 are the soil/edge tiles. The previous implementation used
+    // empty frames here, which is why parts of the garden appeared as holes.
+    const hash = (col * 83492791) ^ (row * 2971215073);
+    return 57 + (Math.abs(hash) % 7);
   }
 
   private getWorldBounds(): {
