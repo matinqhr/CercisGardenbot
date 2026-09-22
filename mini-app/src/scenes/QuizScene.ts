@@ -45,7 +45,7 @@ export class QuizScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor('#7b315f');
+    this.cameras.main.setBackgroundColor('#340a3a');
 
     const pattern = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'cercis-head')
       .setOrigin(0)
@@ -55,9 +55,9 @@ export class QuizScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: pattern,
-      tilePositionX: pattern.tilePositionX + 180,
-      tilePositionY: pattern.tilePositionY + 90,
-      duration: 9000,
+      tilePositionX: pattern.tilePositionX + 260,
+      tilePositionY: pattern.tilePositionY + 130,
+      duration: 10000,
       repeat: -1,
       ease: 'Linear'
     });
@@ -454,7 +454,7 @@ export class QuizScene extends Phaser.Scene {
     });
 
     this.submitButton.setText(
-      this.currentIndex + 1 < this.questions.length ? 'NEXT' : 'پایان دور'
+      this.currentIndex + 1 < this.questions.length ? 'بعدی' : 'پایان پرسه در دانش'
     );
     this.submitButton.setStyle({ backgroundColor: '#7b315f' });
     this.submitButton.removeAllListeners('pointerdown');
@@ -728,7 +728,7 @@ export class QuizScene extends Phaser.Scene {
         this.playEndRoundSound('correct-count');
 
         this.time.delayedCall(1200, () => {
-          const cases = this.add.text(width / 2, height * 0.58, `${this.casesReceived} پرونده دریافت شد`, {
+          const cases = this.add.text(width / 2, height * 0.58, `📚 ${this.casesReceived} پرونده دریافت شد`, {
             fontFamily: 'SamimBold',
             fontSize: '18px',
             color: '#7b315f',
@@ -745,7 +745,7 @@ export class QuizScene extends Phaser.Scene {
               color: '#9b8490'
             }).setOrigin(0.5).setAlpha(0);
 
-            const next = this.add.text(width / 2, height * 0.76, 'دور بعدی', {
+            const next = this.add.text(width / 2, height * 0.76, 'پرسه در دانش بعدی', {
               fontFamily: 'SamimBold',
               fontSize: '16px',
               color: '#fff8e8',
