@@ -978,23 +978,6 @@ export class QuizScene extends Phaser.Scene {
   private clearQuestionUI(): void {
     this.destroyTextScrollers();
 
-    this.input.off('wheel', this.handleScrollWheel, this);
-    this.input.off('pointerdown', this.handleScrollPointerDown, this);
-    this.input.off('pointermove', this.handleScrollPointerMove, this);
-    this.input.off('pointerup', this.handleScrollPointerUp, this);
-    this.input.off('pointerupoutside', this.handleScrollPointerUp, this);
-
-    this.scrollMaskShape?.destroy();
-    this.scrollMaskShape = undefined;
-    this.scrollMask = undefined;
-    this.scrollTrack?.destroy();
-    this.scrollTrack = undefined;
-    this.scrollThumb?.destroy();
-    this.scrollThumb = undefined;
-    this.scrollObjects = [];
-    this.scrollBaseY.clear();
-    this.scrollOffset = 0;
-    this.scrollMax = 0;
     this.questionText?.destroy();
     this.questionText = undefined;
 
