@@ -9,7 +9,8 @@ The first playable version focuses only on the learning loop:
 ### Included
 - Random 5-question rounds from the local question bank
 - Exactly 3 options per question
-- Single-answer and multi-answer questions
+- Single-choice interaction: the player always selects exactly one option
+- Each question may have one, two, or all three options marked as correct
 - Selection before submission
 - Correct-answer feedback
 - XP awarded only for fully correct answers
