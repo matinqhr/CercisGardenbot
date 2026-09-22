@@ -8,7 +8,7 @@ export class QuizIntroScene extends Phaser.Scene {
   create(): void {
     const { width, height } = this.scale;
 
-    this.cameras.main.setBackgroundColor('#7b315f');
+    this.cameras.main.setBackgroundColor('#340a3a');
 
     const pattern = this.add.tileSprite(0, 0, width, height, 'cercis-head')
       .setOrigin(0)
@@ -17,9 +17,9 @@ export class QuizIntroScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: pattern,
-      tilePositionX: pattern.tilePositionX + 180,
-      tilePositionY: pattern.tilePositionY + 90,
-      duration: 9000,
+      tilePositionX: pattern.tilePositionX + 260,
+      tilePositionY: pattern.tilePositionY + 130,
+      duration: 10000,
       repeat: -1,
       ease: 'Linear'
     });
@@ -28,10 +28,9 @@ export class QuizIntroScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDisplaySize(Math.min(width * 0.72, 330), Math.min(width * 0.72, 330) * 0.28);
 
-    const start = this.add.text(width / 2, height * 0.58, 'شروع دور', {
-      fontFamily: 'Samim',
-      fontSize: '19px',
-      fontStyle: '700',
+    const start = this.add.text(width / 2, height * 0.58, 'پرسه در دانش', {
+      fontFamily: 'SamimBold',
+      fontSize: '18px',
       color: '#7b315f',
       backgroundColor: '#fff8e8',
       padding: { left: 38, right: 38, top: 13, bottom: 13 }
