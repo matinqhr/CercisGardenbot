@@ -7,7 +7,7 @@ const ROUND_SIZE = 5;
 export class QuizScene extends Phaser.Scene {
   private questions: Question[] = [];
   private currentIndex = 0;
-  private selected = new Set<number>();
+  private selected: number | null = null;
   private answered = false;
   private xp = 0;
   private questionNumberText?: Phaser.GameObjects.Text;
@@ -44,7 +44,7 @@ export class QuizScene extends Phaser.Scene {
 
   private renderQuestion(): void {
     this.clearQuestionUI();
-    this.selected.clear();
+    this.selected = null;
     this.answered = false;
     const question = this.questions[this.currentIndex];
     const { width, height } = this.scale;
@@ -90,8 +90,7 @@ export class QuizScene extends Phaser.Scene {
   private checkAnswer(): void {
     if (this.answered || !this.submitButton) return;
     const question = this.questions[this.currentIndex];
-    const expected = new Set(question.correctAnswers);
-    const isCorrect = expected.size === this.selected.size && [...expected].every((answer) => this.selected.has(answer));
+    const isCorrect = this.selected !== null && question.correctAnswers.includes(this.selected);
     this.answered = true;
 
     if (isCorrect) {
@@ -103,8 +102,8 @@ export class QuizScene extends Phaser.Scene {
     }
 
     this.optionButtons.forEach((button, i) => {
-      const correct = expected.has(i);
-      const selected = this.selected.has(i);
+      const correct = question.correctAnswers.includes(i);
+      const selected = this.selected === i;
       button.setStyle({ backgroundColor: correct ? '#d8ead0' : selected ? '#ead4d4' : '#ffffff' });
     });
 
