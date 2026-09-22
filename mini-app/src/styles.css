@@ -1,3 +1,27 @@
+@font-face {
+  font-family: "Samim";
+  src: url("/Fonts/Samim-FD.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Samim";
+  src: url("/Fonts/Samim-Medium-FD.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Samim";
+  src: url("/Fonts/Samim-Bold-FD.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 html, body, #game {
   margin: 0;
   width: 100%;
@@ -8,4 +32,5 @@ html, body, #game {
 
 body {
   touch-action: manipulation;
+  font-family: "Samim", sans-serif;
 }
