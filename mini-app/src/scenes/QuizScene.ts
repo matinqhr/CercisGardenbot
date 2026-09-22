@@ -234,7 +234,10 @@ export class QuizScene extends Phaser.Scene {
       const card = this.add.graphics();
       this.drawOptionCard(card, width, y, cardHeight, index, false, false);
       card.setAlpha(0);
+      card.setDepth(1);
       this.optionCards.push(card);
+
+      text.setDepth(2);
 
       const number = this.add.text(width * 0.12, y, String(index + 1).padStart(2, '0'), {
         fontFamily: 'SamimBold',
