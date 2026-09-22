@@ -5,6 +5,20 @@ import { fetchQuizQuestions, receiveQuizCases, telegramReady } from '../api/quiz
 
 const ROUND_SIZE = 10;
 
+type TextScroller = {
+  text: Phaser.GameObjects.Text;
+  maskShape: Phaser.GameObjects.Graphics;
+  mask: Phaser.Display.Masks.GeometryMask;
+  track: Phaser.GameObjects.Graphics;
+  thumb: Phaser.GameObjects.Graphics;
+  top: number;
+  bottom: number;
+  max: number;
+  baseY: number;
+  dragStartY: number;
+  dragStartOffset: number;
+};
+
 export class QuizScene extends Phaser.Scene {
   private questions: Question[] = [];
   private currentIndex = 0;
@@ -42,6 +56,8 @@ export class QuizScene extends Phaser.Scene {
   private scrollViewportBottom = 0;
   private scrollDragStartY = 0;
   private scrollDragStartOffset = 0;
+  private textScrollers: TextScroller[] = [];
+  private activeTextScroller?: TextScroller;
 
   constructor() {
     super('QuizScene');
@@ -197,7 +213,7 @@ export class QuizScene extends Phaser.Scene {
       fontSize: questionFontSize,
       color: '#211f1d',
       align: 'center',
-      wordWrap: { width: questionTextWidth },
+      wordWrap: { width: questionTextWidth - 16 },
       lineSpacing: 5
     }).setOrigin(0.5).setAlpha(0);
 
@@ -207,6 +223,14 @@ export class QuizScene extends Phaser.Scene {
     archiveLabel.setY(questionTop + 18);
     mark.setY(questionTop + 18);
     this.drawQuestionFrame(this.questionFrame, width, height, questionTop, questionHeight);
+
+    this.createTextScroller(
+      this.questionText,
+      questionTop + 43,
+      questionTop + questionHeight - 16,
+      width * 0.08,
+      width * 0.92
+    );
 
     this.tweens.add({
       targets: [this.questionFrame, archiveLabel, mark, this.questionText],
@@ -236,12 +260,18 @@ export class QuizScene extends Phaser.Scene {
       }).setOrigin(0.5).setAlpha(0);
 
       const measured = text.getBounds().height + 28;
-      const cardHeight = Math.max(62, Math.min(100, measured));
+      const cardHeight = Math.max(62, Math.min(104, measured));
       const y = optionCursorY + cardHeight / 2;
       optionCursorY += cardHeight + optionGap;
       this.optionY.push(y);
       this.optionHeights.push(cardHeight);
-      text.setY(y);
+      const viewportTop = y - cardHeight / 2 + 10;
+      const viewportBottom = y + cardHeight / 2 - 10;
+      const contentHeight = text.getBounds().height;
+
+      text.setY(contentHeight > viewportBottom - viewportTop
+        ? viewportTop + contentHeight / 2
+        : y);
 
       const card = this.add.graphics();
       this.drawOptionCard(card, width, y, cardHeight, index, false, false);
@@ -280,6 +310,14 @@ export class QuizScene extends Phaser.Scene {
 
       text.on('pointerdown', () => this.toggleOption(index));
       this.optionButtons.push(text);
+
+      this.createTextScroller(
+        text,
+        viewportTop,
+        viewportBottom,
+        width * 0.11,
+        width * 0.89
+      );
 
       this.tweens.add({
         targets: [card, number, text],
@@ -324,6 +362,124 @@ export class QuizScene extends Phaser.Scene {
       delay: 300,
       ease: 'Cubic.easeOut'
     });
+  }
+
+  private createTextScroller(
+    text: Phaser.GameObjects.Text,
+    top: number,
+    bottom: number,
+    left: number,
+    right: number
+  ): void {
+    const contentHeight = text.getBounds().height;
+    const viewportHeight = bottom - top;
+
+    if (contentHeight <= viewportHeight + 2) return;
+
+    const maskShape = this.add.graphics({ x: 0, y: 0 });
+    maskShape.fillStyle(0xffffff, 1);
+    maskShape.fillRect(left, top, right - left, viewportHeight);
+    maskShape.setVisible(false);
+
+    const mask = maskShape.createGeometryMask();
+    text.setMask(mask);
+
+    const trackX = right - 6;
+    const track = this.add.graphics();
+    track.fillStyle(0x7b315f, 0.14);
+    track.fillRoundedRect(trackX - 2, top, 4, viewportHeight, 2);
+
+    const thumb = this.add.graphics();
+    const scroller: TextScroller = {
+      text,
+      maskShape,
+      mask,
+      track,
+      thumb,
+      top,
+      bottom,
+      max: Math.max(0, contentHeight - viewportHeight),
+      baseY: text.y,
+      dragStartY: 0,
+      dragStartOffset: 0
+    };
+
+    this.textScrollers.push(scroller);
+    this.updateTextScroller(scroller);
+
+    thumb.setInteractive(
+      new Phaser.Geom.Rectangle(trackX - 10, top, 20, viewportHeight),
+      Phaser.Geom.Rectangle.Contains
+    );
+
+    thumb.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      scroller.dragStartY = pointer.y;
+      scroller.dragStartOffset = this.getTextScrollOffset(scroller);
+      this.activeTextScroller = scroller;
+    });
+
+    this.input.on('pointermove', this.handleTextScrollerMove, this);
+    this.input.on('pointerup', this.handleTextScrollerUp, this);
+    this.input.on('pointerupoutside', this.handleTextScrollerUp, this);
+  }
+
+  private getTextScrollOffset(scroller: TextScroller): number {
+    return scroller.baseY - scroller.text.y;
+  }
+
+  private setTextScroll(scroller: TextScroller, offset: number): void {
+    const next = Phaser.Math.Clamp(offset, 0, scroller.max);
+    scroller.text.y = scroller.baseY - next;
+    this.updateTextScroller(scroller);
+  }
+
+  private updateTextScroller(scroller: TextScroller): void {
+    const viewportHeight = scroller.bottom - scroller.top;
+    const thumbHeight = Math.max(28, viewportHeight * (viewportHeight / (viewportHeight + scroller.max)));
+    const travel = viewportHeight - thumbHeight;
+    const offset = this.getTextScrollOffset(scroller);
+    const thumbY = scroller.top + (scroller.max === 0 ? 0 : (offset / scroller.max) * travel);
+    const trackX = this.scale.width * 0.92 - 6;
+
+    scroller.thumb.clear();
+    scroller.thumb.fillStyle(0x7b315f, 0.72);
+    scroller.thumb.fillRoundedRect(trackX - 3, thumbY, 6, thumbHeight, 3);
+  }
+
+  private handleTextScrollerMove(pointer: Phaser.Input.Pointer): void {
+    if (!this.activeTextScroller || !pointer.isDown) return;
+
+    const scroller = this.activeTextScroller;
+    const viewportHeight = scroller.bottom - scroller.top;
+    const thumbHeight = Math.max(28, viewportHeight * (viewportHeight / (viewportHeight + scroller.max)));
+    const travel = viewportHeight - thumbHeight;
+
+    if (travel <= 0) return;
+
+    const delta = scroller.dragStartY - pointer.y;
+    const offset = scroller.dragStartOffset + (delta / travel) * scroller.max;
+    this.setTextScroll(scroller, offset);
+  }
+
+  private handleTextScrollerUp(): void {
+    this.activeTextScroller = undefined;
+  }
+
+  private destroyTextScrollers(): void {
+    this.input.off('pointermove', this.handleTextScrollerMove, this);
+    this.input.off('pointerup', this.handleTextScrollerUp, this);
+    this.input.off('pointerupoutside', this.handleTextScrollerUp, this);
+
+    this.textScrollers.forEach((scroller) => {
+      scroller.text.clearMask(true);
+      scroller.maskShape.destroy();
+      scroller.mask.destroy();
+      scroller.track.destroy();
+      scroller.thumb.destroy();
+    });
+
+    this.textScrollers = [];
+    this.activeTextScroller = undefined;
   }
 
   private setupQuestionScroll(viewportTop: number, viewportBottom: number, contentBottom: number): void {
@@ -914,6 +1070,8 @@ export class QuizScene extends Phaser.Scene {
   }
 
   private clearQuestionUI(): void {
+    this.destroyTextScrollers();
+
     this.input.off('wheel', this.handleScrollWheel, this);
     this.input.off('pointerdown', this.handleScrollPointerDown, this);
     this.input.off('pointermove', this.handleScrollPointerMove, this);
