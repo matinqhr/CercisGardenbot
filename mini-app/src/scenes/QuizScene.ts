@@ -180,7 +180,7 @@ export class QuizScene extends Phaser.Scene {
       lineSpacing: 5
     }).setOrigin(0.5).setAlpha(0);
 
-    const questionHeight = Phaser.Math.Clamp(this.questionText.getBounds().height + 86, 145, 260);
+    const questionHeight = Phaser.Math.Clamp(this.questionText.getBounds().height + 86, 145, 220);
     const questionCenterY = questionTop + questionHeight / 2;
     this.questionText.setY(questionCenterY + 10);
     archiveLabel.setY(questionTop + 18);
@@ -197,12 +197,11 @@ export class QuizScene extends Phaser.Scene {
 
     this.optionY = [];
     this.optionHeights = [];
-    const optionFontSize = (option: string) => option.length > 180 ? 14 : option.length > 120 ? 16 : 18;
-    const optionGap = 12;
+    const optionFontSize = (option: string) => option.length > 180 ? 12 : option.length > 120 ? 14 : option.length > 80 ? 16 : 18;
+    const optionGap = 10;
     const optionStart = questionTop + questionHeight + 28;
     const optionAvailableBottom = height * 0.78;
-    const totalAvailable = optionAvailableBottom - optionStart;
-    const provisionalHeight = Math.max(62, Math.min(105, (totalAvailable - optionGap * 2) / 3));
+    let optionCursorY = optionStart;
 
     question.options.forEach((option, index) => {
       const fontSize = optionFontSize(option);
@@ -216,8 +215,9 @@ export class QuizScene extends Phaser.Scene {
       }).setOrigin(0.5).setAlpha(0);
 
       const measured = text.getBounds().height + 28;
-      const cardHeight = Math.max(62, Math.min(provisionalHeight, measured));
-      const y = optionStart + cardHeight / 2 + index * (provisionalHeight + optionGap);
+      const cardHeight = Math.max(62, Math.min(100, measured));
+      const y = optionCursorY + cardHeight / 2;
+      optionCursorY += cardHeight + optionGap;
       this.optionY.push(y);
       this.optionHeights.push(cardHeight);
       text.setY(y);
