@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Question } from '../data/questionBank';
 import { addXP, getXP } from '../state/gameState';
 import { fetchQuizQuestions, receiveQuizCases, telegramReady } from '../api/quiz';
+import { applyHighDpiText } from '../utils/highDpi';
 
 const ROUND_SIZE = 10;
 
@@ -339,6 +340,8 @@ export class QuizScene extends Phaser.Scene {
       align: 'center',
       wordWrap: { width: width * 0.86 }
     }).setOrigin(0.5).setAlpha(0);
+
+    applyHighDpiText(this);
 
     this.tweens.add({
       targets: this.submitButton,
@@ -943,6 +946,7 @@ export class QuizScene extends Phaser.Scene {
             next.on('pointerover', () => this.tweens.add({ targets: next, scale: 1.04, duration: 100 }));
             next.on('pointerout', () => this.tweens.add({ targets: next, scale: 1, duration: 100 }));
             next.on('pointerdown', () => this.scene.restart());
+            applyHighDpiText(this);
           });
         });
       });
