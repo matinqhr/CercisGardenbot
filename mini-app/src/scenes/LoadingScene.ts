@@ -28,15 +28,19 @@ export class LoadingScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#340a3a');
     this.add.rectangle(width / 2, height / 2, width, height, 0x340a3a);
 
-    const logo = this.add.image(width / 2, height / 2 - 18, 'cercis-logo')
-      .setOrigin(0.5)
-      .setDisplaySize(Math.min(width * 0.72, 330), Math.min(width * 0.72, 330) * 0.28);
+    const logoWidth = Math.min(width * 0.78, 320);
+    const logoHeight = logoWidth * (2 / 3);
 
-    this.add.text(width / 2, height / 2 + 70, 'اگر زندگی به شما لیمو داد، با آن شربت آبلیمو درست کنید.', {
+    const logo = this.add.image(width / 2, height / 2 - 35, 'cercis-logo')
+      .setOrigin(0.5)
+      .setDisplaySize(logoWidth, logoHeight);
+
+    this.add.text(width / 2, height / 2 + 105, 'اگر زندگی به شما لیمو داد، با آن شربت آبلیمو درست کنید.', {
       fontFamily: 'SamimMedium',
       fontSize: '12px',
-      fontStyle: 'normal',
-      color: '#f2dce8'
+      color: '#f2dce8',
+      align: 'center',
+      wordWrap: { width: width * 0.82 }
     }).setOrigin(0.5);
 
     this.tweens.add({
