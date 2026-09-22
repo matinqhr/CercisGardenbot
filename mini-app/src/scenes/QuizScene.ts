@@ -44,18 +44,6 @@ export class QuizScene extends Phaser.Scene {
   private optionY: number[] = [];
   private optionHeights: number[] = [];
   private progressObjects: Phaser.GameObjects.Rectangle[] = [];
-  private scrollObjects: Phaser.GameObjects.GameObject[] = [];
-  private scrollBaseY = new Map<Phaser.GameObjects.GameObject, number>();
-  private scrollMaskShape?: Phaser.GameObjects.Graphics;
-  private scrollMask?: Phaser.Display.Masks.GeometryMask;
-  private scrollTrack?: Phaser.GameObjects.Graphics;
-  private scrollThumb?: Phaser.GameObjects.Graphics;
-  private scrollOffset = 0;
-  private scrollMax = 0;
-  private scrollViewportTop = 0;
-  private scrollViewportBottom = 0;
-  private scrollDragStartY = 0;
-  private scrollDragStartOffset = 0;
   private textScrollers: TextScroller[] = [];
   private activeTextScroller?: TextScroller;
 
@@ -245,7 +233,6 @@ export class QuizScene extends Phaser.Scene {
     const optionFontSize = (option: string) => option.length > 180 ? 12 : option.length > 120 ? 14 : option.length > 80 ? 16 : 18;
     const optionGap = 10;
     const optionStart = questionTop + questionHeight + 28;
-    const optionAvailableBottom = height - 160;
     let optionCursorY = optionStart;
 
     question.options.forEach((option, index) => {
@@ -328,7 +315,6 @@ export class QuizScene extends Phaser.Scene {
       });
     });
 
-    this.setupQuestionScroll(questionTop - 6, optionAvailableBottom, optionCursorY + 10);
     const submitY = height - 54;
     this.submitButton = this.add.text(width / 2, submitY, 'ثبت پاسخ', {
       fontFamily: 'SamimBold',
@@ -407,8 +393,9 @@ export class QuizScene extends Phaser.Scene {
     this.textScrollers.push(scroller);
     this.updateTextScroller(scroller);
 
+    // Give the thumb a larger invisible hit area so it is practical on a phone.
     thumb.setInteractive(
-      new Phaser.Geom.Rectangle(trackX - 10, top, 20, viewportHeight),
+      new Phaser.Geom.Rectangle(trackX - 14, top, 28, viewportHeight),
       Phaser.Geom.Rectangle.Contains
     );
 
@@ -418,13 +405,17 @@ export class QuizScene extends Phaser.Scene {
       this.activeTextScroller = scroller;
     });
 
-    this.input.on('pointermove', this.handleTextScrollerMove, this);
-    this.input.on('pointerup', this.handleTextScrollerUp, this);
-    this.input.on('pointerupoutside', this.handleTextScrollerUp, this);
+    // All scrollers share these listeners; do not register one pair per card.
+    if (this.textScrollers.length === 1) {
+      this.input.on('wheel', this.handleTextScrollerWheel, this);
+      this.input.on('pointermove', this.handleTextScrollerMove, this);
+      this.input.on('pointerup', this.handleTextScrollerUp, this);
+      this.input.on('pointerupoutside', this.handleTextScrollerUp, this);
+    }
   }
 
   private getTextScrollOffset(scroller: TextScroller): number {
-    return scroller.baseY - scroller.text.y;
+    return Phaser.Math.Clamp(scroller.baseY - scroller.text.y, 0, scroller.max);
   }
 
   private setTextScroll(scroller: TextScroller, offset: number): void {
@@ -435,15 +426,32 @@ export class QuizScene extends Phaser.Scene {
 
   private updateTextScroller(scroller: TextScroller): void {
     const viewportHeight = scroller.bottom - scroller.top;
-    const thumbHeight = Math.max(28, viewportHeight * (viewportHeight / (viewportHeight + scroller.max)));
+    const thumbHeight = Math.max(
+      28,
+      viewportHeight * (viewportHeight / (viewportHeight + scroller.max))
+    );
     const travel = viewportHeight - thumbHeight;
     const offset = this.getTextScrollOffset(scroller);
-    const thumbY = scroller.top + (scroller.max === 0 ? 0 : (offset / scroller.max) * travel);
     const trackX = this.scale.width * 0.92 - 6;
+    const thumbY = scroller.top + (scroller.max === 0 ? 0 : (offset / scroller.max) * travel);
 
     scroller.thumb.clear();
     scroller.thumb.fillStyle(0x7b315f, 0.72);
     scroller.thumb.fillRoundedRect(trackX - 3, thumbY, 6, thumbHeight, 3);
+  }
+
+  private handleTextScrollerWheel(
+    pointer: Phaser.Input.Pointer,
+    _currentlyOver: Phaser.GameObjects.GameObject[],
+    _dx: number,
+    dy: number
+  ): void {
+    const scroller = this.textScrollers.find((item) =>
+      pointer.y >= item.top && pointer.y <= item.bottom
+    );
+    if (!scroller) return;
+
+    this.setTextScroll(scroller, this.getTextScrollOffset(scroller) + dy * 0.65);
   }
 
   private handleTextScrollerMove(pointer: Phaser.Input.Pointer): void {
@@ -451,7 +459,10 @@ export class QuizScene extends Phaser.Scene {
 
     const scroller = this.activeTextScroller;
     const viewportHeight = scroller.bottom - scroller.top;
-    const thumbHeight = Math.max(28, viewportHeight * (viewportHeight / (viewportHeight + scroller.max)));
+    const thumbHeight = Math.max(
+      28,
+      viewportHeight * (viewportHeight / (viewportHeight + scroller.max))
+    );
     const travel = viewportHeight - thumbHeight;
 
     if (travel <= 0) return;
@@ -466,126 +477,21 @@ export class QuizScene extends Phaser.Scene {
   }
 
   private destroyTextScrollers(): void {
+    this.input.off('wheel', this.handleTextScrollerWheel, this);
     this.input.off('pointermove', this.handleTextScrollerMove, this);
     this.input.off('pointerup', this.handleTextScrollerUp, this);
     this.input.off('pointerupoutside', this.handleTextScrollerUp, this);
 
     this.textScrollers.forEach((scroller) => {
+      // clearMask(true) already destroys the GeometryMask.
       scroller.text.clearMask(true);
       scroller.maskShape.destroy();
-      scroller.mask.destroy();
       scroller.track.destroy();
       scroller.thumb.destroy();
     });
 
     this.textScrollers = [];
     this.activeTextScroller = undefined;
-  }
-
-  private setupQuestionScroll(viewportTop: number, viewportBottom: number, contentBottom: number): void {
-    this.scrollOffset = 0;
-    this.scrollViewportTop = viewportTop;
-    this.scrollViewportBottom = viewportBottom;
-    this.scrollMax = Math.max(0, contentBottom - viewportBottom);
-
-    this.scrollObjects = [
-      ...(this.questionFrame ? [this.questionFrame] : []),
-      ...this.questionMetaTexts,
-      ...(this.questionText ? [this.questionText] : []),
-      ...this.optionCards,
-      ...this.optionButtons,
-      ...this.optionNumbers
-    ];
-
-    this.scrollBaseY.clear();
-    this.scrollObjects.forEach((object) => {
-      this.scrollBaseY.set(object, (object as Phaser.GameObjects.GameObject & { y: number }).y);
-    });
-
-    if (this.scrollMax <= 2) return;
-
-    const maskShape = this.add.graphics({ x: 0, y: 0 });
-    maskShape.fillStyle(0xffffff, 1);
-    maskShape.fillRect(0, viewportTop, this.scale.width, viewportBottom - viewportTop);
-    maskShape.setVisible(false);
-    this.scrollMaskShape = maskShape;
-    this.scrollMask = maskShape.createGeometryMask();
-
-    this.scrollObjects.forEach((object) => {
-      const masked = object as Phaser.GameObjects.GameObject & { setMask?: (mask: Phaser.Display.Masks.GeometryMask) => unknown };
-      masked.setMask?.(this.scrollMask!);
-    });
-
-    const x = this.scale.width - 9;
-    this.scrollTrack = this.add.graphics();
-    this.scrollTrack.fillStyle(0xffffff, 0.18);
-    this.scrollTrack.fillRoundedRect(x - 2, viewportTop, 4, viewportBottom - viewportTop, 2);
-
-    this.scrollThumb = this.add.graphics();
-    this.updateScrollThumb();
-
-    this.input.on('wheel', this.handleScrollWheel, this);
-    this.input.on('pointerdown', this.handleScrollPointerDown, this);
-    this.input.on('pointermove', this.handleScrollPointerMove, this);
-    this.input.on('pointerup', this.handleScrollPointerUp, this);
-    this.input.on('pointerupoutside', this.handleScrollPointerUp, this);
-  }
-
-  private handleScrollWheel(
-    pointer: Phaser.Input.Pointer,
-    _currentlyOver: Phaser.GameObjects.GameObject[],
-    _dx: number,
-    dy: number
-  ): void {
-    if (this.scrollMax <= 0) return;
-    if (pointer.y < this.scrollViewportTop || pointer.y > this.scrollViewportBottom) return;
-    this.setQuestionScroll(this.scrollOffset + dy * 0.65);
-  }
-
-  private handleScrollPointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.scrollMax <= 0) return;
-    if (pointer.y < this.scrollViewportTop || pointer.y > this.scrollViewportBottom) return;
-
-    this.scrollDragStartY = pointer.y;
-    this.scrollDragStartOffset = this.scrollOffset;
-  }
-
-  private handleScrollPointerMove(pointer: Phaser.Input.Pointer): void {
-    if (this.scrollMax <= 0 || !pointer.isDown) return;
-    if (this.scrollDragStartY === 0) return;
-
-    const delta = this.scrollDragStartY - pointer.y;
-    this.setQuestionScroll(this.scrollDragStartOffset + delta);
-  }
-
-  private handleScrollPointerUp(): void {
-    this.scrollDragStartY = 0;
-  }
-
-  private setQuestionScroll(offset: number): void {
-    this.scrollOffset = Phaser.Math.Clamp(offset, 0, this.scrollMax);
-
-    this.scrollObjects.forEach((object) => {
-      const baseY = this.scrollBaseY.get(object);
-      if (baseY === undefined) return;
-      (object as Phaser.GameObjects.GameObject & { y: number }).y = baseY - this.scrollOffset;
-    });
-
-    this.updateScrollThumb();
-  }
-
-  private updateScrollThumb(): void {
-    if (!this.scrollTrack || !this.scrollThumb) return;
-
-    const viewportHeight = this.scrollViewportBottom - this.scrollViewportTop;
-    const thumbHeight = Math.max(42, viewportHeight * (viewportHeight / (viewportHeight + this.scrollMax)));
-    const travel = viewportHeight - thumbHeight;
-    const thumbY = this.scrollViewportTop + (this.scrollMax === 0 ? 0 : (this.scrollOffset / this.scrollMax) * travel);
-    const x = this.scale.width - 9;
-
-    this.scrollThumb.clear();
-    this.scrollThumb.fillStyle(0xf7edf3, 0.72);
-    this.scrollThumb.fillRoundedRect(x - 3, thumbY, 6, thumbHeight, 3);
   }
 
   private drawQuestionFrame(
