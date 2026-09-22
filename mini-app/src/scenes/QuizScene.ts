@@ -667,7 +667,7 @@ export class QuizScene extends Phaser.Scene {
       ease: 'Cubic.easeOut'
     });
   }
-}
+
   private clearQuestionUI(): void {
     this.questionText?.destroy();
     this.questionText = undefined;
