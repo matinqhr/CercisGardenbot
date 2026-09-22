@@ -27,6 +27,8 @@ export class QuizScene extends Phaser.Scene {
   private optionButtons: Phaser.GameObjects.Text[] = [];
   private optionCards: Phaser.GameObjects.Graphics[] = [];
   private optionNumbers: Phaser.GameObjects.Text[] = [];
+  private optionY: number[] = [];
+  private optionHeights: number[] = [];
   private progressObjects: Phaser.GameObjects.Rectangle[] = [];
 
   constructor() {
@@ -146,18 +148,21 @@ export class QuizScene extends Phaser.Scene {
 
     this.progressObjects.push(progressBg, progress);
 
-    // Cercis archive-style question card.
-    this.questionFrame = this.add.graphics().setAlpha(0);
-    this.drawQuestionFrame(this.questionFrame, width, height);
+    // Cercis archive-style question card. Layout adapts to long question/option text.
+    const questionFontSize = question.text.length > 240 ? 16 : question.text.length > 170 ? 18 : 21;
+    const questionTop = height * 0.125;
+    const questionTextWidth = width * 0.76;
 
-    const archiveLabel = this.add.text(width * 0.11, height * 0.145, 'ARCHIVE // FIELD TEST', {
+    this.questionFrame = this.add.graphics().setAlpha(0);
+
+    const archiveLabel = this.add.text(width * 0.11, questionTop + 18, 'ARCHIVE // FIELD TEST', {
       fontFamily: 'monospace',
       fontSize: '9px',
       color: '#9b8490',
       fontStyle: 'bold'
     }).setOrigin(0, 0.5).setAlpha(0);
 
-    const mark = this.add.text(width * 0.89, height * 0.145, 'CERCIS', {
+    const mark = this.add.text(width * 0.89, questionTop + 18, 'CERCIS', {
       fontFamily: 'monospace',
       fontSize: '9px',
       color: '#9b8490',
@@ -166,14 +171,21 @@ export class QuizScene extends Phaser.Scene {
 
     this.questionMetaTexts = [archiveLabel, mark];
 
-    this.questionText = this.add.text(width / 2, height * 0.235, question.text, {
+    this.questionText = this.add.text(width / 2, questionTop + 58, question.text, {
       fontFamily: 'sans-serif',
-      fontSize: '21px',
+      fontSize: questionFontSize,
       color: '#211f1d',
       align: 'center',
-      wordWrap: { width: width * 0.76 },
-      lineSpacing: 7
+      wordWrap: { width: questionTextWidth },
+      lineSpacing: 5
     }).setOrigin(0.5).setAlpha(0);
+
+    const questionHeight = Phaser.Math.Clamp(this.questionText.getBounds().height + 86, 145, 260);
+    const questionCenterY = questionTop + questionHeight / 2;
+    this.questionText.setY(questionCenterY + 10);
+    archiveLabel.setY(questionTop + 18);
+    mark.setY(questionTop + 18);
+    this.drawQuestionFrame(this.questionFrame, width, height, questionTop, questionHeight);
 
     this.tweens.add({
       targets: [this.questionFrame, archiveLabel, mark, this.questionText],
@@ -183,10 +195,35 @@ export class QuizScene extends Phaser.Scene {
       ease: 'Cubic.easeOut'
     });
 
+    this.optionY = [];
+    this.optionHeights = [];
+    const optionFontSize = (option: string) => option.length > 180 ? 14 : option.length > 120 ? 16 : 18;
+    const optionGap = 12;
+    const optionStart = questionTop + questionHeight + 28;
+    const optionAvailableBottom = height * 0.78;
+    const totalAvailable = optionAvailableBottom - optionStart;
+    const provisionalHeight = Math.max(62, Math.min(105, (totalAvailable - optionGap * 2) / 3));
+
     question.options.forEach((option, index) => {
-      const y = height * (0.43 + index * 0.13);
+      const fontSize = optionFontSize(option);
+      const text = this.add.text(width / 2, 0, option, {
+        fontFamily: 'sans-serif',
+        fontSize,
+        color: '#211f1d',
+        align: 'center',
+        wordWrap: { width: width * 0.68 },
+        lineSpacing: 4
+      }).setOrigin(0.5).setAlpha(0);
+
+      const measured = text.getBounds().height + 28;
+      const cardHeight = Math.max(62, Math.min(provisionalHeight, measured));
+      const y = optionStart + cardHeight / 2 + index * (provisionalHeight + optionGap);
+      this.optionY.push(y);
+      this.optionHeights.push(cardHeight);
+      text.setY(y);
+
       const card = this.add.graphics();
-      this.drawOptionCard(card, width, height, index, false, false);
+      this.drawOptionCard(card, width, y, cardHeight, index, false, false);
       card.setAlpha(0);
       this.optionCards.push(card);
 
@@ -198,36 +235,30 @@ export class QuizScene extends Phaser.Scene {
       }).setOrigin(0, 0.5).setAlpha(0);
       this.optionNumbers.push(number);
 
-      const button = this.add.text(width / 2, y, option, {
-        fontFamily: 'sans-serif',
-        fontSize: '18px',
-        color: '#211f1d',
-        align: 'center',
-        wordWrap: { width: width * 0.72 }
-      }).setOrigin(0.5).setInteractive(
-        new Phaser.Geom.Rectangle(-width * 0.42, -31, width * 0.84, 62),
+      text.setInteractive(
+        new Phaser.Geom.Rectangle(-width * 0.42, -cardHeight / 2, width * 0.84, cardHeight),
         Phaser.Geom.Rectangle.Contains
-      ).setAlpha(0);
+      );
 
-      button.on('pointerover', () => {
+      text.on('pointerover', () => {
         if (!this.answered && this.selected !== index) {
-          this.tweens.add({ targets: button, scale: 1.015, duration: 90 });
-          this.drawOptionCard(card, width, height, index, false, true);
+          this.tweens.add({ targets: text, scale: 1.015, duration: 90 });
+          this.drawOptionCard(card, width, y, cardHeight, index, false, true);
         }
       });
 
-      button.on('pointerout', () => {
+      text.on('pointerout', () => {
         if (!this.answered && this.selected !== index) {
-          this.tweens.add({ targets: button, scale: 1, duration: 90 });
-          this.drawOptionCard(card, width, height, index, false, false);
+          this.tweens.add({ targets: text, scale: 1, duration: 90 });
+          this.drawOptionCard(card, width, y, cardHeight, index, false, false);
         }
       });
 
-      button.on('pointerdown', () => this.toggleOption(index));
-      this.optionButtons.push(button);
+      text.on('pointerdown', () => this.toggleOption(index));
+      this.optionButtons.push(text);
 
       this.tweens.add({
-        targets: [card, number, button],
+        targets: [card, number, text],
         alpha: 1,
         duration: 280,
         delay: 100 + index * 70,
@@ -235,7 +266,8 @@ export class QuizScene extends Phaser.Scene {
       });
     });
 
-    this.submitButton = this.add.text(width / 2, height * 0.82, 'CHECK', {
+    const submitY = Math.min(height * 0.86, optionAvailableBottom + 52);
+    this.submitButton = this.add.text(width / 2, submitY, 'CHECK', {
       fontFamily: 'monospace',
       fontSize: '16px',
       color: '#fff8e8',
@@ -262,7 +294,7 @@ export class QuizScene extends Phaser.Scene {
     this.tweens.add({
       targets: this.submitButton,
       alpha: 1,
-      y: height * 0.80,
+      y: submitY - 6,
       duration: 300,
       delay: 300,
       ease: 'Cubic.easeOut'
@@ -272,12 +304,12 @@ export class QuizScene extends Phaser.Scene {
   private drawQuestionFrame(
     frame: Phaser.GameObjects.Graphics,
     width: number,
-    height: number
+    height: number,
+    top: number,
+    boxHeight: number
   ): void {
     const left = width * 0.07;
-    const top = height * 0.15;
     const boxWidth = width * 0.86;
-    const boxHeight = height * 0.20;
 
     frame.clear();
     frame.fillStyle(0xfaf7f2, 1);
@@ -301,12 +333,12 @@ export class QuizScene extends Phaser.Scene {
   private drawOptionCard(
     card: Phaser.GameObjects.Graphics,
     width: number,
-    height: number,
+    y: number,
+    boxHeight: number,
     index: number,
     selected: boolean,
     hovered: boolean
   ): void {
-    const y = height * (0.43 + index * 0.13);
     const left = width * 0.08;
     const boxWidth = width * 0.84;
     const fill = selected ? 0xead8e2 : hovered ? 0xfaf7f2 : 0xffffff;
@@ -315,8 +347,8 @@ export class QuizScene extends Phaser.Scene {
     card.clear();
     card.fillStyle(fill, 1);
     card.lineStyle(selected ? 2 : 1, stroke, 1);
-    card.fillRoundedRect(left, y - 31, boxWidth, 62, 11);
-    card.strokeRoundedRect(left, y - 31, boxWidth, 62, 11);
+    card.fillRoundedRect(left, y - boxHeight / 2, boxWidth, boxHeight, 11);
+    card.strokeRoundedRect(left, y - boxHeight / 2, boxWidth, boxHeight, 11);
 
     card.fillStyle(selected ? 0x7b315f : 0xcdbec6, 1);
     card.fillRect(left + 12, y - 9, 3, 18);
@@ -447,12 +479,13 @@ export class QuizScene extends Phaser.Scene {
 
     if (card) {
       const { width, height } = this.scale;
-      const y = height * (0.43 + index * 0.13);
+      const y = this.optionY[index];
+      const cardHeight = this.optionHeights[index];
       card.clear();
       card.fillStyle(0xddebdc, 1);
       card.lineStyle(2, 0x4f7651, 1);
-      card.fillRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 11);
-      card.strokeRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 11);
+      card.fillRoundedRect(width * 0.08, y - cardHeight / 2, width * 0.84, cardHeight, 11);
+      card.strokeRoundedRect(width * 0.08, y - cardHeight / 2, width * 0.84, cardHeight, 11);
     }
 
     if (number) {
@@ -515,12 +548,13 @@ export class QuizScene extends Phaser.Scene {
         if (!card) return;
 
         const { width, height } = this.scale;
-        const y = height * (0.43 + correctIndex * 0.13);
+          const y = this.optionY[correctIndex];
+        const cardHeight = this.optionHeights[correctIndex];
         card.clear();
         card.fillStyle(0xe4eee3, 1);
         card.lineStyle(2, 0x6b8f6d, 1);
-        card.fillRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 11);
-        card.strokeRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 11);
+        card.fillRoundedRect(width * 0.08, y - cardHeight / 2, width * 0.84, cardHeight, 11);
+        card.strokeRoundedRect(width * 0.08, y - cardHeight / 2, width * 0.84, cardHeight, 11);
 
         const correctNumber = this.optionNumbers[correctIndex];
         if (correctNumber) {
@@ -613,7 +647,7 @@ export class QuizScene extends Phaser.Scene {
 
     const floating = this.add.text(
       width * 0.50,
-      height * (0.43 + optionIndex * 0.13),
+      this.optionY[optionIndex],
       `+${amount} XP`,
       {
       fontFamily: 'monospace',
@@ -775,6 +809,8 @@ export class QuizScene extends Phaser.Scene {
 
     this.optionNumbers.forEach((number) => number.destroy());
     this.optionNumbers = [];
+    this.optionY = [];
+    this.optionHeights = [];
     this.progressObjects.forEach((bar) => bar.destroy());
     this.progressObjects = [];
   }
