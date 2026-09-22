@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { QUESTION_BANK, Question } from '../data/questionBank';
 import { addXP, getXP } from '../state/gameState';
 
-const ROUND_SIZE = 5;
+const ROUND_SIZE = 10;
 
 export class QuizScene extends Phaser.Scene {
   private questions: Question[] = [];
@@ -130,7 +130,10 @@ export class QuizScene extends Phaser.Scene {
         color: '#211f1d',
         align: 'center',
         wordWrap: { width: width * 0.72 }
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setAlpha(0);
+      }).setOrigin(0.5).setInteractive(
+        new Phaser.Geom.Rectangle(-width * 0.42, -31, width * 0.84, 62),
+        Phaser.Geom.Rectangle.Contains
+      ).setAlpha(0);
 
       button.on('pointerover', () => {
         if (!this.answered && this.selected !== index) {
