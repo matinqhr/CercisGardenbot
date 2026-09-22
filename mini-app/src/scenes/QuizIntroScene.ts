@@ -12,7 +12,7 @@ export class QuizIntroScene extends Phaser.Scene {
 
     const pattern = this.add.tileSprite(0, 0, width, height, 'cercis-head')
       .setOrigin(0)
-      .setAlpha(0.055);
+      .setAlpha(0.12);
     pattern.setTileScale(0.24, 0.24);
 
     this.tweens.add({
@@ -28,7 +28,7 @@ export class QuizIntroScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDisplaySize(Math.min(width * 0.72, 330), Math.min(width * 0.72, 330) * 0.28);
 
-    const start = this.add.text(width / 2, height * 0.58, 'پرسه در دانش', {
+    const start = this.add.text(width / 2, height * 0.58, 'پَرسه در پُرسه', {
       fontFamily: 'SamimBold',
       fontSize: '18px',
       color: '#7b315f',
