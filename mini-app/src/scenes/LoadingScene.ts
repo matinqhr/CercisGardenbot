@@ -18,7 +18,7 @@ export class LoadingScene extends Phaser.Scene {
       margin: 0
     });
 
-    this.load.image('cercis-logo', '/images/cercis-logo.png');
+    this.load.image('cercis-logo', '/images/Transparent_logo.png');
     this.load.image('cercis-head', '/images/cercis-head.png');
   }
 
