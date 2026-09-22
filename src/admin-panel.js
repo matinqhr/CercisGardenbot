@@ -2,7 +2,7 @@ const tg=async(e,m,b={})=>(await fetch(`https://api.telegram.org/bot${e.BOT_TOKE
 const resp=x=>new Response(JSON.stringify(x),{status:200,headers:{"content-type":"application/json"}});
 const admin=(e,id)=>String(e.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean).includes(String(id));
 const esc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
-const panel={inline_keyboard:[[{text:"➕ افزودن پرونده",callback_data:"add"}],[{text:"✏️ ویرایش پرونده",callback_data:"edit"}],[{text:"🗑 حذف پرونده",callback_data:"delete"}],[{text:"📊 آمار",callback_data:"stats"}],[{text:"📢 پیام همگانی",callback_data:"broadcast"}],[{text:"🌱 از کاستی تا کمال",callback_data:"ideas"}]]};
+const panel={inline_keyboard:[[{text:"➕ افزودن پرونده",callback_data:"add"}],[{text:"✏️ ویرایش پرونده",callback_data:"edit"}],[{text:"🧠 مدیریت سوال‌ها",callback_data:"quiz_panel"}],[{text:"🗑 حذف پرونده",callback_data:"delete"}],[{text:"📊 آمار",callback_data:"stats"}],[{text:"📢 پیام همگانی",callback_data:"broadcast"}],[{text:"🌱 از کاستی تا کمال",callback_data:"ideas"}]]};
 async function q1(e,sql,...b){try{return await e.DB.prepare(sql).bind(...b).first()}catch{return null}}
 async function qall(e,sql,...b){try{return(await e.DB.prepare(sql).bind(...b).all()).results||[]}catch{return[]}}
 async function n(e,sql,...b){const r=await q1(e,sql,...b);return Number(r?.n||0)}
