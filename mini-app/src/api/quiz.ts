@@ -1,4 +1,4 @@
-export type RemoteQuestion = { id:string; text:string; options:string[]; correctAnswers:number[]; xp:number; hasCases?:boolean };
+export type RemoteQuestion = { id:string; text:string; options:string[]; correctAnswers:number[]; xp:number; difficulty?:'easy'|'medium'|'hard'; hasCases?:boolean };
 declare global {
   interface Window {
     Telegram?: { WebApp?: { initData:string; ready:()=>void } };
