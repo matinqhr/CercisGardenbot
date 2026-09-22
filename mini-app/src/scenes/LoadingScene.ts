@@ -33,9 +33,9 @@ export class LoadingScene extends Phaser.Scene {
       .setDisplaySize(Math.min(width * 0.72, 330), Math.min(width * 0.72, 330) * 0.28);
 
     this.add.text(width / 2, height / 2 + 70, 'آرشیو — امن', {
-      fontFamily: 'Samim',
+      fontFamily: 'SamimMedium',
       fontSize: '13px',
-      fontStyle: '500',
+      fontStyle: 'normal',
       color: '#f2dce8'
     }).setOrigin(0.5);
 
