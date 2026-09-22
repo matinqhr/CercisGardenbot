@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { QUESTION_BANK, Question } from '../data/questionBank';
+import { Question } from '../data/questionBank';
 import { addXP, getXP } from '../state/gameState';
 import { fetchQuizQuestions, receiveQuizCases, telegramReady } from '../api/quiz';
 
@@ -74,38 +74,32 @@ export class QuizScene extends Phaser.Scene {
   }
 
   private async loadRound(): Promise<void> {
-    const loading = this.add.text(this.scale.width / 2, this.scale.height / 2, 'در حال بارگذاری سؤال‌ها...', {
+    const loading = this.add.text(this.scale.width / 2, this.scale.height / 2, 'در حال بارگذاری سؤال‌ها از آرشیو...', {
       fontFamily: 'SamimBold',
       fontSize: '14px',
-      color: '#7b315f',
-      fontStyle: 'bold'
+      color: '#f7edf3',
+      align: 'center',
+      wordWrap: { width: this.scale.width * 0.78 }
     }).setOrigin(0.5);
 
     try {
       const remote = await fetchQuizQuestions();
-      if (remote.length) {
-        this.questions = Phaser.Utils.Array.Shuffle(remote).slice(0, Math.min(ROUND_SIZE, remote.length));
-      } else {
-        this.questions = this.pickRound();
+
+      if (remote.length < ROUND_SIZE) {
+        throw new Error(`فقط ${remote.length} سؤال فعال در بانک سؤال وجود دارد؛ برای یک پرسه کامل ۱۰ سؤال لازم است.`);
       }
-    } catch {
-      this.questions = this.pickRound();
+
+      this.questions = Phaser.Utils.Array.Shuffle(remote).slice(0, ROUND_SIZE);
+      loading.destroy();
+      this.renderQuestion();
+    } catch (error) {
+      loading.setText(
+        error instanceof Error
+          ? error.message
+          : 'بارگذاری سؤال‌ها انجام نشد.'
+      );
+      loading.setStyle({ color: '#f7d7df', fontSize: '14px' });
     }
-
-    loading.destroy();
-
-    if (!this.questions.length) {
-      this.questions = this.pickRound();
-    }
-
-    this.renderQuestion();
-  }
-
-  private pickRound(): Question[] {
-    return Phaser.Utils.Array.Shuffle([...QUESTION_BANK]).slice(
-      0,
-      Math.min(ROUND_SIZE, QUESTION_BANK.length)
-    );
   }
 
   private createHeader(): void {
