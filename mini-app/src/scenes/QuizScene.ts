@@ -81,9 +81,11 @@ export class QuizScene extends Phaser.Scene {
 
   private toggleOption(index: number): void {
     if (this.answered) return;
-    this.selected.has(index) ? this.selected.delete(index) : this.selected.add(index);
+
+    this.selected = index;
+
     this.optionButtons.forEach((button, i) => button.setStyle({
-      backgroundColor: this.selected.has(i) ? '#ead8e2' : '#ffffff'
+      backgroundColor: this.selected === i ? '#ead8e2' : '#ffffff'
     }));
   }
 
