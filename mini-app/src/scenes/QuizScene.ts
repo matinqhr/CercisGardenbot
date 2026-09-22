@@ -348,7 +348,7 @@ export class QuizScene extends Phaser.Scene {
 
     if (this.scrollMax <= 2) return;
 
-    const maskShape = this.make.graphics({ x: 0, y: 0, add: true });
+    const maskShape = this.add.graphics({ x: 0, y: 0 });
     maskShape.fillStyle(0xffffff, 1);
     maskShape.fillRect(0, viewportTop, this.scale.width, viewportBottom - viewportTop);
     maskShape.setVisible(false);
