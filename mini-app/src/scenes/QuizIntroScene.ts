@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyHighDpiText } from '../utils/highDpi';
 
 export class QuizIntroScene extends Phaser.Scene {
   constructor() {
@@ -52,6 +53,7 @@ export class QuizIntroScene extends Phaser.Scene {
       });
     });
 
+    applyHighDpiText(this);
     void logo;
   }
 }
