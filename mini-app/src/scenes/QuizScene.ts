@@ -175,7 +175,13 @@ export class QuizScene extends Phaser.Scene {
       padding: { left: 30, right: 30, top: 11, bottom: 11 }
     }).setOrigin(0.5).setAlpha(0);
 
-    this.submitButton.disableInteractive();
+    this.submitButton.setInteractive({ useHandCursor: true });
+
+    this.submitButton.on('pointerdown', () => {
+      if (this.selected !== null && !this.answered) {
+        this.checkAnswer();
+      }
+    });
 
     this.feedbackText = this.add.text(width / 2, height * 0.91, '', {
       fontFamily: 'monospace',
@@ -202,7 +208,6 @@ export class QuizScene extends Phaser.Scene {
 
     if (this.submitButton) {
       this.submitButton.setStyle({ backgroundColor: '#7b315f' });
-      this.submitButton.setInteractive({ useHandCursor: true });
     }
 
     this.optionButtons.forEach((button, i) => {
