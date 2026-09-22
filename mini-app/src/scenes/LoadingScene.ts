@@ -25,16 +25,16 @@ export class LoadingScene extends Phaser.Scene {
   create(): void {
     const { width, height } = this.scale;
 
-    this.cameras.main.setBackgroundColor('#7b315f');
-    this.add.rectangle(width / 2, height / 2, width, height, 0x7b315f);
+    this.cameras.main.setBackgroundColor('#340a3a');
+    this.add.rectangle(width / 2, height / 2, width, height, 0x340a3a);
 
     const logo = this.add.image(width / 2, height / 2 - 18, 'cercis-logo')
       .setOrigin(0.5)
       .setDisplaySize(Math.min(width * 0.72, 330), Math.min(width * 0.72, 330) * 0.28);
 
-    this.add.text(width / 2, height / 2 + 70, 'آرشیو — امن', {
+    this.add.text(width / 2, height / 2 + 70, 'اگر زندگی به شما لیمو داد، با آن شربت آبلیمو درست کنید.', {
       fontFamily: 'SamimMedium',
-      fontSize: '13px',
+      fontSize: '12px',
       fontStyle: 'normal',
       color: '#f2dce8'
     }).setOrigin(0.5);
