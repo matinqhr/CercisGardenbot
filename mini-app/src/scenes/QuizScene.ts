@@ -343,8 +343,7 @@ export class QuizScene extends Phaser.Scene {
 
     this.scrollBaseY.clear();
     this.scrollObjects.forEach((object) => {
-      const positioned = object as Phaser.GameObjects.Components.Transform;
-      this.scrollBaseY.set(object, positioned.y);
+      this.scrollBaseY.set(object, (object as Phaser.GameObjects.GameObject & { y: number }).y);
     });
 
     if (this.scrollMax <= 2) return;
@@ -413,7 +412,7 @@ export class QuizScene extends Phaser.Scene {
     this.scrollObjects.forEach((object) => {
       const baseY = this.scrollBaseY.get(object);
       if (baseY === undefined) return;
-      (object as Phaser.GameObjects.Components.Transform).y = baseY - this.scrollOffset;
+      (object as Phaser.GameObjects.GameObject & { y: number }).y = baseY - this.scrollOffset;
     });
 
     this.updateScrollThumb();
