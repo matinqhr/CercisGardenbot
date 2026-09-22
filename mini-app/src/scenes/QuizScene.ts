@@ -10,6 +10,7 @@ export class QuizScene extends Phaser.Scene {
   private selected: number | null = null;
   private answered = false;
   private xp = 0;
+  private roundXP = 0;
 
   private questionNumberText?: Phaser.GameObjects.Text;
   private xpText?: Phaser.GameObjects.Text;
@@ -24,11 +25,17 @@ export class QuizScene extends Phaser.Scene {
     super('QuizScene');
   }
 
+  preload(): void {
+    this.load.audio('correct-answer', '/audio/correct.mp3');
+    this.load.audio('wrong-answer', '/audio/wrong.mp3');
+  }
+
   create(): void {
     this.cameras.main.setBackgroundColor('#f4efe8');
     this.cameras.main.fadeIn(260, 0, 0, 0);
 
     this.xp = getXP();
+    this.roundXP = 0;
     this.questions = this.pickRound();
 
     this.createHeader();
@@ -164,17 +171,19 @@ export class QuizScene extends Phaser.Scene {
       fontFamily: 'monospace',
       fontSize: '16px',
       color: '#fff8e8',
-      backgroundColor: '#7b315f',
+      backgroundColor: '#b9aeb4',
       padding: { left: 30, right: 30, top: 11, bottom: 11 }
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setAlpha(0);
+    }).setOrigin(0.5).setAlpha(0);
 
-    this.submitButton.on('pointerover', () => {
-      if (!this.answered) this.tweens.add({ targets: this.submitButton, scale: 1.04, duration: 100 });
-    });
-    this.submitButton.on('pointerout', () => {
-      if (!this.answered) this.tweens.add({ targets: this.submitButton, scale: 1, duration: 100 });
-    });
-    this.submitButton.on('pointerdown', () => this.checkAnswer());
+    this.submitButton.disableInteractive();
+
+    this.feedbackText = this.add.text(width / 2, height * 0.91, '', {
+      fontFamily: 'monospace',
+      fontSize: '14px',
+      color: '#7b315f',
+      align: 'center',
+      wordWrap: { width: width * 0.86 }
+    }).setOrigin(0.5).setAlpha(0);
 
     this.tweens.add({
       targets: this.submitButton,
@@ -184,20 +193,17 @@ export class QuizScene extends Phaser.Scene {
       delay: 300,
       ease: 'Cubic.easeOut'
     });
-
-    this.feedbackText = this.add.text(width / 2, height * 0.91, '', {
-      fontFamily: 'monospace',
-      fontSize: '14px',
-      color: '#7b315f',
-      align: 'center',
-      wordWrap: { width: width * 0.86 }
-    }).setOrigin(0.5).setAlpha(0);
   }
 
   private toggleOption(index: number): void {
     if (this.answered) return;
 
     this.selected = index;
+
+    if (this.submitButton) {
+      this.submitButton.setStyle({ backgroundColor: '#7b315f' });
+      this.submitButton.setInteractive({ useHandCursor: true });
+    }
 
     this.optionButtons.forEach((button, i) => {
       const active = this.selected === i;
@@ -227,17 +233,19 @@ export class QuizScene extends Phaser.Scene {
   }
 
   private checkAnswer(): void {
-    if (this.answered || !this.submitButton) return;
+    if (this.answered || this.selected === null || !this.submitButton) return;
 
     const question = this.questions[this.currentIndex];
-    const isCorrect =
-      this.selected !== null && question.correctAnswers.includes(this.selected);
+    const isCorrect = question.correctAnswers.includes(this.selected);
 
     this.answered = true;
 
     if (isCorrect) {
       this.xp = addXP(question.xp);
+      this.roundXP += question.xp;
       this.feedbackText?.setText(`CORRECT  +${question.xp} XP`).setColor('#4f7651');
+      this.playAnswerSound('correct-answer');
+      this.animateCorrectFeedback(this.selected);
       this.animateXPGain(question.xp);
     } else {
       this.feedbackText
@@ -247,6 +255,8 @@ export class QuizScene extends Phaser.Scene {
             .join(' + ')}`
         )
         .setColor('#9b4a4a');
+      this.playAnswerSound('wrong-answer');
+      this.animateWrongFeedback(this.selected);
     }
 
     this.tweens.add({
@@ -268,6 +278,7 @@ export class QuizScene extends Phaser.Scene {
     this.submitButton.setText(
       this.currentIndex + 1 < this.questions.length ? 'NEXT' : 'ROUND COMPLETE'
     );
+    this.submitButton.setStyle({ backgroundColor: '#7b315f' });
     this.submitButton.removeAllListeners('pointerdown');
     this.submitButton.setInteractive({ useHandCursor: true });
 
@@ -284,6 +295,80 @@ export class QuizScene extends Phaser.Scene {
       } else {
         this.showRoundComplete();
       }
+    });
+  }
+
+  private playAnswerSound(key: 'correct-answer' | 'wrong-answer'): void {
+    if (!this.cache.audio.exists(key)) return;
+
+    const sound = this.sound.get(key);
+    if (sound) {
+      sound.stop();
+      sound.play();
+    } else {
+      this.sound.play(key, { volume: 0.85 });
+    }
+  }
+
+  private animateCorrectFeedback(index: number): void {
+    const card = this.optionCards[index];
+    const button = this.optionButtons[index];
+
+    if (card) {
+      card.clear();
+      const { width, height } = this.scale;
+      const y = height * (0.43 + index * 0.13);
+      card.fillStyle(0xddebdc, 1);
+      card.lineStyle(2, 0x4f7651, 1);
+      card.fillRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 10);
+      card.strokeRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 10);
+    }
+
+    if (button) {
+      this.tweens.add({
+        targets: button,
+        scale: { from: 1.025, to: 1.07 },
+        duration: 130,
+        yoyo: true,
+        repeat: 1,
+        ease: 'Sine.easeInOut'
+      });
+    }
+
+    this.cameras.main.flash(90, 245, 255, 235, false);
+  }
+
+  private animateWrongFeedback(index: number | null): void {
+    const button = index === null ? undefined : this.optionButtons[index];
+
+    if (button) {
+      this.tweens.add({
+        targets: button,
+        x: '+=7',
+        duration: 45,
+        yoyo: true,
+        repeat: 3,
+        ease: 'Sine.easeInOut'
+      });
+    }
+
+    this.cameras.main.shake(100, 0.0025);
+
+    this.time.delayedCall(110, () => {
+      const question = this.questions[this.currentIndex];
+
+      question.correctAnswers.forEach((correctIndex) => {
+        const card = this.optionCards[correctIndex];
+        if (!card) return;
+
+        const { width, height } = this.scale;
+        const y = height * (0.43 + correctIndex * 0.13);
+        card.clear();
+        card.fillStyle(0xe4eee3, 1);
+        card.lineStyle(2, 0x6b8f6d, 1);
+        card.fillRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 10);
+        card.strokeRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 10);
+      });
     });
   }
 
@@ -358,9 +443,15 @@ export class QuizScene extends Phaser.Scene {
       color: '#211f1d'
     }).setOrigin(0.5).setAlpha(0);
 
-    const total = this.add.text(width / 2, height * 0.47, `TOTAL XP  ${this.xp}`, {
+    const gained = this.add.text(width / 2, height * 0.44, `+${this.roundXP} XP THIS ROUND`, {
       fontFamily: 'monospace',
       fontSize: '18px',
+      color: '#4f7651'
+    }).setOrigin(0.5).setAlpha(0);
+
+    const total = this.add.text(width / 2, height * 0.50, `TOTAL XP  ${this.xp}`, {
+      fontFamily: 'monospace',
+      fontSize: '16px',
       color: '#7b315f'
     }).setOrigin(0.5).setAlpha(0);
 
@@ -372,7 +463,13 @@ export class QuizScene extends Phaser.Scene {
       padding: { left: 30, right: 30, top: 11, bottom: 11 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setAlpha(0);
 
-    this.tweens.add({ targets: [title, total], alpha: 1, y: '-=10', duration: 350, ease: 'Cubic.easeOut' });
+    this.tweens.add({
+      targets: [title, gained, total],
+      alpha: 1,
+      y: '-=10',
+      duration: 350,
+      ease: 'Cubic.easeOut'
+    });
     this.tweens.add({ targets: next, alpha: 1, y: '-=10', duration: 300, delay: 220, ease: 'Back.easeOut' });
 
     next.on('pointerover', () => this.tweens.add({ targets: next, scale: 1.04, duration: 100 }));
