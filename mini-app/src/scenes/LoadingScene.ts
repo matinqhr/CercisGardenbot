@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyHighDpiText } from '../utils/highDpi';
 
 export class LoadingScene extends Phaser.Scene {
   constructor() {
@@ -42,6 +43,8 @@ export class LoadingScene extends Phaser.Scene {
       align: 'center',
       wordWrap: { width: width * 0.82 }
     }).setOrigin(0.5);
+
+    applyHighDpiText(this);
 
     this.tweens.add({
       targets: logo,
