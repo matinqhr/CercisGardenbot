@@ -4,6 +4,7 @@ export type Question = {
   options: string[];
   correctAnswers: number[];
   xp: number;
+  hasCases?: boolean;
 };
 
 export const QUESTION_BANK: Question[] = [
