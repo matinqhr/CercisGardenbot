@@ -9,9 +9,11 @@ import './styles.css';
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: 'game',
-  backgroundColor: '#7b315f',
-  pixelArt: true,
-  roundPixels: true,
+  backgroundColor: '#340a3a',
+  antialias: true,
+  pixelArt: false,
+  roundPixels: false,
+  resolution: Math.min(window.devicePixelRatio || 1, 3),
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -21,4 +23,14 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [BootScene, LoadingScene, QuizIntroScene, QuizScene]
 };
 
-new Phaser.Game(config);
+async function startGame(): Promise<void> {
+  await Promise.all([
+    document.fonts.load('400 16px "Samim"'),
+    document.fonts.load('500 16px "SamimMedium"'),
+    document.fonts.load('700 16px "SamimBold"')
+  ]);
+
+  new Phaser.Game(config);
+}
+
+void startGame();
