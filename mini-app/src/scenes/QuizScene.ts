@@ -427,7 +427,7 @@ export class QuizScene extends Phaser.Scene {
     } else {
       this.feedbackText
         ?.setText(
-          `NOT QUITE  •  +0 🌱\\nCorrect: ${question.correctAnswers
+          `این پاسخ درست نبود.\\nپاسخ درست: ${question.correctAnswers
             .map((i) => question.options[i])
             .join(' + ')}`
         )
@@ -541,12 +541,12 @@ export class QuizScene extends Phaser.Scene {
 
     if (card && index !== null) {
       const { width, height } = this.scale;
-      const y = height * (0.43 + index * 0.13);
+      const y = this.optionY[index];
       card.clear();
       card.fillStyle(0xf2dfdf, 1);
       card.lineStyle(2, 0x9b4a4a, 1);
-      card.fillRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 11);
-      card.strokeRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 11);
+      card.fillRoundedRect(width * 0.08, y - this.optionHeights[index] / 2, width * 0.84, this.optionHeights[index], 11);
+      card.strokeRoundedRect(width * 0.08, y - this.optionHeights[index] / 2, width * 0.84, this.optionHeights[index], 11);
     }
 
     if (number) {
@@ -706,7 +706,7 @@ export class QuizScene extends Phaser.Scene {
     this.playEndRoundSound('round-complete');
 
     this.time.delayedCall(1500, () => {
-      const gained = this.add.text(width / 2, height * 0.36, `+${this.roundXP} 🌱 THIS ROUND`, {
+      const gained = this.add.text(width / 2, height * 0.36, `+${this.roundXP} 🌱 در این دور`, {
         fontFamily: 'SamimBold',
         fontSize: '21px',
         color: '#4f7651',
@@ -739,7 +739,7 @@ export class QuizScene extends Phaser.Scene {
           this.playEndRoundSound('case-count');
 
           this.time.delayedCall(900, () => {
-            const total = this.add.text(width / 2, height * 0.66, `TOTAL 🌱  ${this.xp}`, {
+            const total = this.add.text(width / 2, height * 0.66, `مجموع جوانه‌ها  🌱 ${this.xp}`, {
               fontFamily: 'SamimBold',
               fontSize: '15px',
               color: '#9b8490'
