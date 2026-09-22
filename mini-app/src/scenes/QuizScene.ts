@@ -16,9 +16,11 @@ export class QuizScene extends Phaser.Scene {
   private xpText?: Phaser.GameObjects.Text;
   private questionText?: Phaser.GameObjects.Text;
   private feedbackText?: Phaser.GameObjects.Text;
+  private questionFrame?: Phaser.GameObjects.Graphics;
   private submitButton?: Phaser.GameObjects.Text;
   private optionButtons: Phaser.GameObjects.Text[] = [];
   private optionCards: Phaser.GameObjects.Graphics[] = [];
+  private optionNumbers: Phaser.GameObjects.Text[] = [];
   private progressObjects: Phaser.GameObjects.Rectangle[] = [];
 
   constructor() {
@@ -104,19 +106,37 @@ export class QuizScene extends Phaser.Scene {
 
     this.progressObjects.push(progressBg, progress);
 
-    this.questionText = this.add.text(width / 2, height * 0.22, question.text, {
+    // Cercis archive-style question card.
+    this.questionFrame = this.add.graphics().setAlpha(0);
+    this.drawQuestionFrame(this.questionFrame, width, height);
+
+    const archiveLabel = this.add.text(width * 0.11, height * 0.145, 'ARCHIVE // FIELD TEST', {
+      fontFamily: 'monospace',
+      fontSize: '9px',
+      color: '#9b8490',
+      fontStyle: 'bold'
+    }).setOrigin(0, 0.5).setAlpha(0);
+
+    const mark = this.add.text(width * 0.89, height * 0.145, 'CERCIS', {
+      fontFamily: 'monospace',
+      fontSize: '9px',
+      color: '#9b8490',
+      fontStyle: 'bold'
+    }).setOrigin(1, 0.5).setAlpha(0);
+
+    this.questionText = this.add.text(width / 2, height * 0.235, question.text, {
       fontFamily: 'sans-serif',
       fontSize: '21px',
       color: '#211f1d',
       align: 'center',
-      wordWrap: { width: width * 0.84 },
+      wordWrap: { width: width * 0.76 },
       lineSpacing: 7
     }).setOrigin(0.5).setAlpha(0);
 
     this.tweens.add({
-      targets: this.questionText,
+      targets: [this.questionFrame, archiveLabel, mark, this.questionText],
       alpha: 1,
-      y: height * 0.235,
+      y: '-=8',
       duration: 360,
       ease: 'Cubic.easeOut'
     });
@@ -124,12 +144,17 @@ export class QuizScene extends Phaser.Scene {
     question.options.forEach((option, index) => {
       const y = height * (0.43 + index * 0.13);
       const card = this.add.graphics();
-      card.fillStyle(0xffffff, 1);
-      card.lineStyle(1, 0xe2d8d0, 1);
-      card.fillRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 10);
-      card.strokeRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 10);
+      this.drawOptionCard(card, width, height, index, false, false);
       card.setAlpha(0);
       this.optionCards.push(card);
+
+      const number = this.add.text(width * 0.12, y, String(index + 1).padStart(2, '0'), {
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        color: '#9b8490',
+        fontStyle: 'bold'
+      }).setOrigin(0, 0.5).setAlpha(0);
+      this.optionNumbers.push(number);
 
       const button = this.add.text(width / 2, y, option, {
         fontFamily: 'sans-serif',
@@ -145,12 +170,14 @@ export class QuizScene extends Phaser.Scene {
       button.on('pointerover', () => {
         if (!this.answered && this.selected !== index) {
           this.tweens.add({ targets: button, scale: 1.015, duration: 90 });
+          this.drawOptionCard(card, width, height, index, false, true);
         }
       });
 
       button.on('pointerout', () => {
         if (!this.answered && this.selected !== index) {
           this.tweens.add({ targets: button, scale: 1, duration: 90 });
+          this.drawOptionCard(card, width, height, index, false, false);
         }
       });
 
@@ -158,7 +185,7 @@ export class QuizScene extends Phaser.Scene {
       this.optionButtons.push(button);
 
       this.tweens.add({
-        targets: [card, button],
+        targets: [card, number, button],
         alpha: 1,
         y: '-=10',
         duration: 280,
@@ -201,6 +228,59 @@ export class QuizScene extends Phaser.Scene {
     });
   }
 
+  private drawQuestionFrame(
+    frame: Phaser.GameObjects.Graphics,
+    width: number,
+    height: number
+  ): void {
+    const left = width * 0.07;
+    const top = height * 0.15;
+    const boxWidth = width * 0.86;
+    const boxHeight = height * 0.20;
+
+    frame.clear();
+    frame.fillStyle(0xfaf7f2, 1);
+    frame.lineStyle(1, 0xd9cbd2, 1);
+    frame.fillRoundedRect(left, top, boxWidth, boxHeight, 14);
+    frame.strokeRoundedRect(left, top, boxWidth, boxHeight, 14);
+
+    frame.lineStyle(2, 0x7b315f, 0.7);
+    frame.beginPath();
+    frame.moveTo(left + 14, top + 14);
+    frame.lineTo(left + 30, top + 14);
+    frame.moveTo(left + 14, top + 14);
+    frame.lineTo(left + 14, top + 30);
+    frame.moveTo(left + boxWidth - 14, top + boxHeight - 14);
+    frame.lineTo(left + boxWidth - 30, top + boxHeight - 14);
+    frame.moveTo(left + boxWidth - 14, top + boxHeight - 14);
+    frame.lineTo(left + boxWidth - 14, top + boxHeight - 30);
+    frame.strokePath();
+  }
+
+  private drawOptionCard(
+    card: Phaser.GameObjects.Graphics,
+    width: number,
+    height: number,
+    index: number,
+    selected: boolean,
+    hovered: boolean
+  ): void {
+    const y = height * (0.43 + index * 0.13);
+    const left = width * 0.08;
+    const boxWidth = width * 0.84;
+    const fill = selected ? 0xead8e2 : hovered ? 0xfaf7f2 : 0xffffff;
+    const stroke = selected ? 0x7b315f : hovered ? 0xc7b2bd : 0xe2d8d0;
+
+    card.clear();
+    card.fillStyle(fill, 1);
+    card.lineStyle(selected ? 2 : 1, stroke, 1);
+    card.fillRoundedRect(left, y - 31, boxWidth, 62, 11);
+    card.strokeRoundedRect(left, y - 31, boxWidth, 62, 11);
+
+    card.fillStyle(selected ? 0x7b315f : 0xcdbec6, 1);
+    card.fillRect(left + 12, y - 9, 3, 18);
+  }
+
   private toggleOption(index: number): void {
     if (this.answered) return;
 
@@ -223,17 +303,18 @@ export class QuizScene extends Phaser.Scene {
     });
 
     this.optionCards.forEach((card, i) => {
-      if (!(card instanceof Phaser.GameObjects.Graphics)) return;
-      if (i >= this.optionButtons.length) return;
+      this.drawOptionCard(
+        card,
+        this.scale.width,
+        this.scale.height,
+        i,
+        i === index,
+        false
+      );
+    });
 
-      const active = i === index;
-      card.clear();
-      card.fillStyle(active ? 0xead8e2 : 0xffffff, 1);
-      card.lineStyle(1, active ? 0x7b315f : 0xe2d8d0, 1);
-      const { width, height } = this.scale;
-      const y = height * (0.43 + i * 0.13);
-      card.fillRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 10);
-      card.strokeRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 10);
+    this.optionNumbers.forEach((number, i) => {
+      number.setStyle({ color: i === index ? '#7b315f' : '#9b8490' });
     });
   }
 
@@ -248,6 +329,7 @@ export class QuizScene extends Phaser.Scene {
     if (isCorrect) {
       this.xp = addXP(question.xp);
       this.roundXP += question.xp;
+      this.xpText?.setText(`XP ${this.xp}`);
       this.feedbackText?.setText(`CORRECT  +${question.xp} XP`).setColor('#4f7651');
       this.playAnswerSound('correct-answer');
       this.animateCorrectFeedback(this.selected);
@@ -318,15 +400,21 @@ export class QuizScene extends Phaser.Scene {
   private animateCorrectFeedback(index: number): void {
     const card = this.optionCards[index];
     const button = this.optionButtons[index];
+    const number = this.optionNumbers[index];
 
     if (card) {
-      card.clear();
       const { width, height } = this.scale;
       const y = height * (0.43 + index * 0.13);
+      card.clear();
       card.fillStyle(0xddebdc, 1);
       card.lineStyle(2, 0x4f7651, 1);
-      card.fillRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 10);
-      card.strokeRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 10);
+      card.fillRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 11);
+      card.strokeRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 11);
+    }
+
+    if (number) {
+      number.setText('✓');
+      number.setStyle({ color: '#4f7651', fontSize: '15px' });
     }
 
     if (button) {
@@ -345,6 +433,8 @@ export class QuizScene extends Phaser.Scene {
 
   private animateWrongFeedback(index: number | null): void {
     const button = index === null ? undefined : this.optionButtons[index];
+    const card = index === null ? undefined : this.optionCards[index];
+    const number = index === null ? undefined : this.optionNumbers[index];
 
     if (button) {
       this.tweens.add({
@@ -355,6 +445,21 @@ export class QuizScene extends Phaser.Scene {
         repeat: 3,
         ease: 'Sine.easeInOut'
       });
+    }
+
+    if (card && index !== null) {
+      const { width, height } = this.scale;
+      const y = height * (0.43 + index * 0.13);
+      card.clear();
+      card.fillStyle(0xf2dfdf, 1);
+      card.lineStyle(2, 0x9b4a4a, 1);
+      card.fillRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 11);
+      card.strokeRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 11);
+    }
+
+    if (number) {
+      number.setText('×');
+      number.setStyle({ color: '#9b4a4a', fontSize: '15px' });
     }
 
     this.cameras.main.shake(100, 0.0025);
@@ -371,8 +476,14 @@ export class QuizScene extends Phaser.Scene {
         card.clear();
         card.fillStyle(0xe4eee3, 1);
         card.lineStyle(2, 0x6b8f6d, 1);
-        card.fillRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 10);
-        card.strokeRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 10);
+        card.fillRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 11);
+        card.strokeRoundedRect(width * 0.08, y - 31, width * 0.84, 62, 11);
+
+        const correctNumber = this.optionNumbers[correctIndex];
+        if (correctNumber) {
+          correctNumber.setText('✓');
+          correctNumber.setStyle({ color: '#4f7651', fontSize: '15px' });
+        }
       });
     });
   }
@@ -385,7 +496,9 @@ export class QuizScene extends Phaser.Scene {
     const movingObjects: Phaser.GameObjects.GameObject[] = [
       ...this.optionButtons,
       ...this.optionCards,
+      ...this.optionNumbers,
       ...this.progressObjects,
+      ...(this.questionFrame ? [this.questionFrame] : []),
       ...(this.questionText ? [this.questionText] : []),
       ...(this.feedbackText ? [this.feedbackText] : [])
     ];
@@ -404,15 +517,20 @@ export class QuizScene extends Phaser.Scene {
     });
   }
 
-  private animateXPGain(amount: number): void {
+  private animateXPGain(amount: number, optionIndex: number): void {
     const { width } = this.scale;
 
-    const floating = this.add.text(width * 0.72, 48, `+${amount} XP`, {
+    const floating = this.add.text(
+      width * 0.50,
+      height * (0.43 + optionIndex * 0.13),
+      `+${amount} XP`,
+      {
       fontFamily: 'monospace',
       fontSize: '15px',
       color: '#7b315f',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
+        fontStyle: 'bold'
+      }
+    ).setOrigin(0.5);
 
     this.tweens.add({
       targets: floating,
@@ -492,11 +610,17 @@ export class QuizScene extends Phaser.Scene {
     this.submitButton?.destroy();
     this.submitButton = undefined;
 
+    this.questionFrame?.destroy();
+    this.questionFrame = undefined;
+
     this.optionButtons.forEach((button) => button.destroy());
     this.optionButtons = [];
 
     this.optionCards.forEach((card) => card.destroy());
     this.optionCards = [];
+
+    this.optionNumbers.forEach((number) => number.destroy());
+    this.optionNumbers = [];
     this.progressObjects.forEach((bar) => bar.destroy());
     this.progressObjects = [];
   }
