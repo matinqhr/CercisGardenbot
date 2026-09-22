@@ -379,7 +379,8 @@ export class QuizScene extends Phaser.Scene {
       this.drawOptionCard(
         card,
         this.scale.width,
-        this.scale.height,
+        this.optionY[i],
+        this.optionHeights[i],
         i,
         i === index,
         false
