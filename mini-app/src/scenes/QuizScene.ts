@@ -45,7 +45,22 @@ export class QuizScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor('#f4efe8');
+    this.cameras.main.setBackgroundColor('#7b315f');
+
+    const pattern = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'cercis-head')
+      .setOrigin(0)
+      .setAlpha(0.055)
+      .setDepth(-10);
+    pattern.setTileScale(0.24, 0.24);
+
+    this.tweens.add({
+      targets: pattern,
+      tilePositionX: pattern.tilePositionX + 180,
+      tilePositionY: pattern.tilePositionY + 90,
+      duration: 9000,
+      repeat: -1,
+      ease: 'Linear'
+    });
     this.cameras.main.fadeIn(260, 0, 0, 0);
     telegramReady();
 
@@ -59,8 +74,8 @@ export class QuizScene extends Phaser.Scene {
   }
 
   private async loadRound(): Promise<void> {
-    const loading = this.add.text(this.scale.width / 2, this.scale.height / 2, 'LOADING QUESTIONS', {
-      fontFamily: 'monospace',
+    const loading = this.add.text(this.scale.width / 2, this.scale.height / 2, 'در حال بارگذاری سؤال‌ها...', {
+      fontFamily: 'SamimBold',
       fontSize: '14px',
       color: '#7b315f',
       fontStyle: 'bold'
@@ -97,14 +112,14 @@ export class QuizScene extends Phaser.Scene {
     const { width } = this.scale;
 
     this.questionNumberText = this.add.text(18, 18, '', {
-      fontFamily: 'monospace',
+      fontFamily: 'SamimBold',
       fontSize: '13px',
       color: '#7b315f',
       fontStyle: 'bold'
     });
 
     this.xpText = this.add.text(width - 18, 18, '', {
-      fontFamily: 'monospace',
+      fontFamily: 'SamimBold',
       fontSize: '13px',
       color: '#7b315f',
       fontStyle: 'bold'
@@ -125,9 +140,9 @@ export class QuizScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     this.questionNumberText?.setText(
-      `QUESTION ${String(this.currentIndex + 1).padStart(2, '0')}/${String(this.questions.length).padStart(2, '0')}`
+      `سؤال ${String(this.currentIndex + 1).padStart(2, '0')}/${String(this.questions.length).padStart(2, '0')}`
     );
-    this.xpText?.setText(`XP ${this.xp}`);
+    this.xpText?.setText(`🌱 جوانه ${this.xp}`);
 
     const progressWidth = Math.min(width * 0.32, 150);
     const progressBg = this.add.rectangle(
@@ -155,15 +170,15 @@ export class QuizScene extends Phaser.Scene {
 
     this.questionFrame = this.add.graphics().setAlpha(0);
 
-    const archiveLabel = this.add.text(width * 0.11, questionTop + 18, 'ARCHIVE // FIELD TEST', {
-      fontFamily: 'monospace',
+    const archiveLabel = this.add.text(width * 0.11, questionTop + 18, 'آرشیو // آزمون میدانی', {
+      fontFamily: 'SamimMedium',
       fontSize: '9px',
       color: '#9b8490',
       fontStyle: 'bold'
     }).setOrigin(0, 0.5).setAlpha(0);
 
-    const mark = this.add.text(width * 0.89, questionTop + 18, 'CERCIS', {
-      fontFamily: 'monospace',
+    const mark = this.add.text(width * 0.89, questionTop + 18, 'سرسیس', {
+      fontFamily: 'SamimBold',
       fontSize: '9px',
       color: '#9b8490',
       fontStyle: 'bold'
@@ -172,7 +187,7 @@ export class QuizScene extends Phaser.Scene {
     this.questionMetaTexts = [archiveLabel, mark];
 
     this.questionText = this.add.text(width / 2, questionTop + 58, question.text, {
-      fontFamily: 'sans-serif',
+      fontFamily: 'Samim',
       fontSize: questionFontSize,
       color: '#211f1d',
       align: 'center',
@@ -206,7 +221,7 @@ export class QuizScene extends Phaser.Scene {
     question.options.forEach((option, index) => {
       const fontSize = optionFontSize(option);
       const text = this.add.text(width / 2, 0, option, {
-        fontFamily: 'sans-serif',
+        fontFamily: 'Samim',
         fontSize,
         color: '#211f1d',
         align: 'center',
@@ -228,7 +243,7 @@ export class QuizScene extends Phaser.Scene {
       this.optionCards.push(card);
 
       const number = this.add.text(width * 0.12, y, String(index + 1).padStart(2, '0'), {
-        fontFamily: 'monospace',
+        fontFamily: 'SamimBold',
         fontSize: '11px',
         color: '#9b8490',
         fontStyle: 'bold'
@@ -267,8 +282,8 @@ export class QuizScene extends Phaser.Scene {
     });
 
     const submitY = Math.min(height * 0.86, optionAvailableBottom + 52);
-    this.submitButton = this.add.text(width / 2, submitY, 'CHECK', {
-      fontFamily: 'monospace',
+    this.submitButton = this.add.text(width / 2, submitY, 'ثبت پاسخ', {
+      fontFamily: 'SamimBold',
       fontSize: '16px',
       color: '#fff8e8',
       backgroundColor: '#b9aeb4',
@@ -284,7 +299,7 @@ export class QuizScene extends Phaser.Scene {
     });
 
     this.feedbackText = this.add.text(width / 2, height * 0.91, '', {
-      fontFamily: 'monospace',
+      fontFamily: 'SamimBold',
       fontSize: '14px',
       color: '#7b315f',
       align: 'center',
@@ -404,15 +419,15 @@ export class QuizScene extends Phaser.Scene {
       this.correctCount += 1;
       this.xp = addXP(question.xp);
       this.roundXP += question.xp;
-      this.xpText?.setText(`XP ${this.xp}`);
-      this.feedbackText?.setText(`CORRECT  +${question.xp} XP`).setColor('#4f7651');
+      this.xpText?.setText(`🌱 جوانه ${this.xp}`);
+      this.feedbackText?.setText(`درست!  +${question.xp} 🌱`).setColor('#4f7651');
       this.playAnswerSound('correct-answer');
       this.animateCorrectFeedback(this.selected);
       this.animateXPGain(question.xp, this.selected);
     } else {
       this.feedbackText
         ?.setText(
-          `NOT QUITE  •  +0 XP\\nCorrect: ${question.correctAnswers
+          `NOT QUITE  •  +0 🌱\\nCorrect: ${question.correctAnswers
             .map((i) => question.options[i])
             .join(' + ')}`
         )
@@ -439,7 +454,7 @@ export class QuizScene extends Phaser.Scene {
     });
 
     this.submitButton.setText(
-      this.currentIndex + 1 < this.questions.length ? 'NEXT' : 'ROUND COMPLETE'
+      this.currentIndex + 1 < this.questions.length ? 'NEXT' : 'پایان دور'
     );
     this.submitButton.setStyle({ backgroundColor: '#7b315f' });
     this.submitButton.removeAllListeners('pointerdown');
@@ -570,8 +585,8 @@ export class QuizScene extends Phaser.Scene {
     if (this.receiveCaseButton) this.receiveCaseButton.destroy();
 
     const { width, height } = this.scale;
-    this.receiveCaseButton = this.add.text(width / 2, height * 0.965, 'RECEIVE CASE', {
-      fontFamily: 'monospace',
+    this.receiveCaseButton = this.add.text(width / 2, height * 0.965, 'دریافت پرونده', {
+      fontFamily: 'SamimBold',
       fontSize: '13px',
       color: '#7b315f',
       backgroundColor: '#ead8e2',
@@ -596,15 +611,15 @@ export class QuizScene extends Phaser.Scene {
       if (this.receivingCase) return;
       this.receivingCase = true;
       this.receiveCaseButton?.disableInteractive();
-      this.receiveCaseButton?.setText('SENDING CASE…');
+      this.receiveCaseButton?.setText('در حال ارسال...');
 
       try {
         const received = await receiveQuizCases(questionId);
         this.casesReceived += received;
-        this.receiveCaseButton?.setText(received > 0 ? 'CASE SENT ✓' : 'CASE ALREADY SENT');
+        this.receiveCaseButton?.setText(received > 0 ? 'پرونده ارسال شد ✓' : 'پرونده قبلاً ارسال شده');
         this.receiveCaseButton?.setStyle({ backgroundColor: received > 0 ? '#ddebdc' : '#e8e1d9', color: received > 0 ? '#4f7651' : '#7b315f' });
       } catch {
-        this.receiveCaseButton?.setText('TRY AGAIN');
+        this.receiveCaseButton?.setText('تلاش دوباره');
         this.receiveCaseButton?.setStyle({ backgroundColor: '#f2dfdf', color: '#9b4a4a' });
         this.receiveCaseButton?.setInteractive({ useHandCursor: true });
         this.receivingCase = false;
@@ -649,9 +664,9 @@ export class QuizScene extends Phaser.Scene {
     const floating = this.add.text(
       width * 0.50,
       this.optionY[optionIndex],
-      `+${amount} XP`,
+      `+${amount} 🌱`,
       {
-      fontFamily: 'monospace',
+      fontFamily: 'SamimBold',
       fontSize: '15px',
       color: '#4f7651',
       fontStyle: 'bold'
@@ -683,16 +698,16 @@ export class QuizScene extends Phaser.Scene {
     this.clearQuestionUI();
 
     const { width, height } = this.scale;
-    this.questionNumberText?.setText('ROUND COMPLETE');
-    this.xpText?.setText(`XP ${this.xp}`);
+    this.questionNumberText?.setText('پایان دور');
+    this.xpText?.setText(`🌱 جوانه ${this.xp}`);
 
     // End-of-round reveal is deliberately staged:
-    // sound → silence → XP → correct count → case count → new round.
+    // sound → silence → 🌱 → correct count → case count → new round.
     this.playEndRoundSound('round-complete');
 
     this.time.delayedCall(1500, () => {
-      const gained = this.add.text(width / 2, height * 0.36, `+${this.roundXP} XP THIS ROUND`, {
-        fontFamily: 'monospace',
+      const gained = this.add.text(width / 2, height * 0.36, `+${this.roundXP} 🌱 THIS ROUND`, {
+        fontFamily: 'SamimBold',
         fontSize: '21px',
         color: '#4f7651',
         fontStyle: 'bold'
@@ -702,8 +717,8 @@ export class QuizScene extends Phaser.Scene {
       this.playEndRoundSound('score-reveal');
 
       this.time.delayedCall(1200, () => {
-        const correct = this.add.text(width / 2, height * 0.47, `${this.correctCount} / ${this.questions.length} CORRECT`, {
-          fontFamily: 'monospace',
+        const correct = this.add.text(width / 2, height * 0.47, `${this.correctCount} / ${this.questions.length} پاسخ درست`, {
+          fontFamily: 'SamimBold',
           fontSize: '19px',
           color: '#211f1d',
           fontStyle: 'bold'
@@ -713,8 +728,8 @@ export class QuizScene extends Phaser.Scene {
         this.playEndRoundSound('correct-count');
 
         this.time.delayedCall(1200, () => {
-          const cases = this.add.text(width / 2, height * 0.58, `${this.casesReceived} CASES RECEIVED`, {
-            fontFamily: 'monospace',
+          const cases = this.add.text(width / 2, height * 0.58, `${this.casesReceived} پرونده دریافت شد`, {
+            fontFamily: 'SamimBold',
             fontSize: '18px',
             color: '#7b315f',
             fontStyle: 'bold'
@@ -724,14 +739,14 @@ export class QuizScene extends Phaser.Scene {
           this.playEndRoundSound('case-count');
 
           this.time.delayedCall(900, () => {
-            const total = this.add.text(width / 2, height * 0.66, `TOTAL XP  ${this.xp}`, {
-              fontFamily: 'monospace',
+            const total = this.add.text(width / 2, height * 0.66, `TOTAL 🌱  ${this.xp}`, {
+              fontFamily: 'SamimBold',
               fontSize: '15px',
               color: '#9b8490'
             }).setOrigin(0.5).setAlpha(0);
 
-            const next = this.add.text(width / 2, height * 0.76, 'NEW ROUND', {
-              fontFamily: 'monospace',
+            const next = this.add.text(width / 2, height * 0.76, 'دور بعدی', {
+              fontFamily: 'SamimBold',
               fontSize: '16px',
               color: '#fff8e8',
               backgroundColor: '#7b315f',
