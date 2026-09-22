@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { QUESTION_BANK, Question } from '../data/questionBank';
 import { addXP, getXP } from '../state/gameState';
+import { fetchQuizQuestions, receiveQuizCases, telegramReady } from '../api/quiz';
 
 const ROUND_SIZE = 10;
 
@@ -13,6 +14,8 @@ export class QuizScene extends Phaser.Scene {
   private roundXP = 0;
   private correctCount = 0;
   private casesReceived = 0;
+  private receiveCaseButton?: Phaser.GameObjects.Text;
+  private receivingCase = false;
 
   private questionNumberText?: Phaser.GameObjects.Text;
   private xpText?: Phaser.GameObjects.Text;
@@ -42,14 +45,42 @@ export class QuizScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor('#f4efe8');
     this.cameras.main.fadeIn(260, 0, 0, 0);
+    telegramReady();
 
     this.xp = getXP();
     this.roundXP = 0;
     this.correctCount = 0;
     this.casesReceived = 0;
-    this.questions = this.pickRound();
 
     this.createHeader();
+    void this.loadRound();
+  }
+
+  private async loadRound(): Promise<void> {
+    const loading = this.add.text(this.scale.width / 2, this.scale.height / 2, 'LOADING QUESTIONS', {
+      fontFamily: 'monospace',
+      fontSize: '14px',
+      color: '#7b315f',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    try {
+      const remote = await fetchQuizQuestions();
+      if (remote.length) {
+        this.questions = Phaser.Utils.Array.Shuffle(remote).slice(0, Math.min(ROUND_SIZE, remote.length));
+      } else {
+        this.questions = this.pickRound();
+      }
+    } catch {
+      this.questions = this.pickRound();
+    }
+
+    loading.destroy();
+
+    if (!this.questions.length) {
+      this.questions = this.pickRound();
+    }
+
     this.renderQuestion();
   }
 
@@ -355,6 +386,7 @@ export class QuizScene extends Phaser.Scene {
         .setColor('#9b4a4a');
       this.playAnswerSound('wrong-answer');
       this.animateWrongFeedback(this.selected);
+      if (question.hasCases) this.showReceiveCaseButton(question.id);
     }
 
     this.tweens.add({
@@ -499,6 +531,52 @@ export class QuizScene extends Phaser.Scene {
     });
   }
 
+  private showReceiveCaseButton(questionId: string): void {
+    if (this.receiveCaseButton) this.receiveCaseButton.destroy();
+
+    const { width, height } = this.scale;
+    this.receiveCaseButton = this.add.text(width / 2, height * 0.965, 'RECEIVE CASE', {
+      fontFamily: 'monospace',
+      fontSize: '13px',
+      color: '#7b315f',
+      backgroundColor: '#ead8e2',
+      padding: { left: 18, right: 18, top: 8, bottom: 8 }
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setAlpha(0);
+
+    this.tweens.add({
+      targets: this.receiveCaseButton,
+      alpha: 1,
+      y: '-=6',
+      duration: 240,
+      ease: 'Back.easeOut'
+    });
+
+    this.receiveCaseButton.on('pointerover', () => {
+      if (!this.receivingCase) this.tweens.add({ targets: this.receiveCaseButton, scale: 1.04, duration: 100 });
+    });
+    this.receiveCaseButton.on('pointerout', () => {
+      this.tweens.add({ targets: this.receiveCaseButton, scale: 1, duration: 100 });
+    });
+    this.receiveCaseButton.on('pointerdown', async () => {
+      if (this.receivingCase) return;
+      this.receivingCase = true;
+      this.receiveCaseButton?.disableInteractive();
+      this.receiveCaseButton?.setText('SENDING CASE…');
+
+      try {
+        const received = await receiveQuizCases(questionId);
+        this.casesReceived += received;
+        this.receiveCaseButton?.setText(received > 0 ? 'CASE SENT ✓' : 'CASE ALREADY SENT');
+        this.receiveCaseButton?.setStyle({ backgroundColor: received > 0 ? '#ddebdc' : '#e8e1d9', color: received > 0 ? '#4f7651' : '#7b315f' });
+      } catch {
+        this.receiveCaseButton?.setText('TRY AGAIN');
+        this.receiveCaseButton?.setStyle({ backgroundColor: '#f2dfdf', color: '#9b4a4a' });
+        this.receiveCaseButton?.setInteractive({ useHandCursor: true });
+        this.receivingCase = false;
+      }
+    });
+  }
+
   private transitionToNextQuestion(): void {
     if (!this.submitButton) return;
 
@@ -512,7 +590,8 @@ export class QuizScene extends Phaser.Scene {
       ...(this.questionFrame ? [this.questionFrame] : []),
       ...this.questionMetaTexts,
       ...(this.questionText ? [this.questionText] : []),
-      ...(this.feedbackText ? [this.feedbackText] : [])
+      ...(this.feedbackText ? [this.feedbackText] : []),
+      ...(this.receiveCaseButton ? [this.receiveCaseButton] : [])
     ];
 
     this.tweens.add({
@@ -677,6 +756,10 @@ export class QuizScene extends Phaser.Scene {
 
     this.submitButton?.destroy();
     this.submitButton = undefined;
+
+    this.receiveCaseButton?.destroy();
+    this.receiveCaseButton = undefined;
+    this.receivingCase = false;
 
     this.questionFrame?.destroy();
     this.questionFrame = undefined;
