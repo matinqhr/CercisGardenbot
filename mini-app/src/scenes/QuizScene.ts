@@ -49,7 +49,7 @@ export class QuizScene extends Phaser.Scene {
 
     const pattern = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'cercis-head')
       .setOrigin(0)
-      .setAlpha(0.055)
+      .setAlpha(0.12)
       .setDepth(-10);
     pattern.setTileScale(0.24, 0.24);
 
@@ -448,7 +448,7 @@ export class QuizScene extends Phaser.Scene {
     });
 
     this.submitButton.setText(
-      this.currentIndex + 1 < this.questions.length ? 'بعدی' : 'پایان پرسه در دانش'
+      this.currentIndex + 1 < this.questions.length ? 'بعدی' : 'پایان پَرسه در پُرسه'
     );
     this.submitButton.setStyle({ backgroundColor: '#7b315f' });
     this.submitButton.removeAllListeners('pointerdown');
@@ -739,7 +739,7 @@ export class QuizScene extends Phaser.Scene {
               color: '#9b8490'
             }).setOrigin(0.5).setAlpha(0);
 
-            const next = this.add.text(width / 2, height * 0.76, 'پرسه در دانش بعدی', {
+            const next = this.add.text(width / 2, height * 0.76, 'پَرسه در پُرسه بعدی', {
               fontFamily: 'SamimBold',
               fontSize: '16px',
               color: '#fff8e8',
