@@ -24,11 +24,14 @@ export class QuizIntroScene extends Phaser.Scene {
       ease: 'Linear'
     });
 
-    const logo = this.add.image(width / 2, height * 0.31, 'cercis-logo')
-      .setOrigin(0.5)
-      .setDisplaySize(Math.min(width * 0.72, 330), Math.min(width * 0.72, 330) * 0.28);
+    const logoWidth = Math.min(width * 0.78, 320);
+    const logoHeight = logoWidth * (2 / 3);
 
-    const start = this.add.text(width / 2, height * 0.58, 'پَرسه در پُرسه', {
+    const logo = this.add.image(width / 2, height * 0.30, 'cercis-logo')
+      .setOrigin(0.5)
+      .setDisplaySize(logoWidth, logoHeight);
+
+    const start = this.add.text(width / 2, height * 0.62, 'پَرسه در پُرسه', {
       fontFamily: 'SamimBold',
       fontSize: '18px',
       color: '#7b315f',
