@@ -18,6 +18,7 @@ export class QuizScene extends Phaser.Scene {
   private submitButton?: Phaser.GameObjects.Text;
   private optionButtons: Phaser.GameObjects.Text[] = [];
   private optionCards: Phaser.GameObjects.Graphics[] = [];
+  private progressObjects: Phaser.GameObjects.Rectangle[] = [];
 
   constructor() {
     super('QuizScene');
@@ -94,10 +95,7 @@ export class QuizScene extends Phaser.Scene {
       0x7b315f
     ).setOrigin(0, 0.5);
 
-    this.optionCards.push(
-      progressBg as unknown as Phaser.GameObjects.Graphics,
-      progress as unknown as Phaser.GameObjects.Graphics
-    );
+    this.progressObjects.push(progressBg, progress);
 
     this.questionText = this.add.text(width / 2, height * 0.22, question.text, {
       fontFamily: 'sans-serif',
@@ -294,6 +292,7 @@ export class QuizScene extends Phaser.Scene {
     const movingObjects: Phaser.GameObjects.GameObject[] = [
       ...this.optionButtons,
       ...this.optionCards,
+      ...this.progressObjects,
       ...(this.questionText ? [this.questionText] : []),
       ...(this.feedbackText ? [this.feedbackText] : [])
     ];
@@ -393,5 +392,7 @@ export class QuizScene extends Phaser.Scene {
 
     this.optionCards.forEach((card) => card.destroy());
     this.optionCards = [];
+    this.progressObjects.forEach((bar) => bar.destroy());
+    this.progressObjects = [];
   }
 }
