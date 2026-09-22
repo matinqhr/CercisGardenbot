@@ -30,7 +30,7 @@ export class QuizIntroScene extends Phaser.Scene {
       .setStrokeStyle(1, 0xb9789a, 0.45)
       .setAlpha(0);
 
-    const count = this.add.text(width / 2, height * 0.455, '05', {
+    const count = this.add.text(width / 2, height * 0.455, '10', {
       fontFamily: 'monospace',
       fontSize: '32px',
       color: '#ffffff',
@@ -55,7 +55,7 @@ export class QuizIntroScene extends Phaser.Scene {
       color: '#ead8e2'
     }).setOrigin(0.5).setAlpha(0);
 
-    const xp = this.add.text(width / 2, height * 0.705, String(getXP()), {
+    const xp = this.add.text(width / 2, height * 0.710, String(getXP()), {
       fontFamily: 'monospace',
       fontSize: '25px',
       color: '#ffffff',
