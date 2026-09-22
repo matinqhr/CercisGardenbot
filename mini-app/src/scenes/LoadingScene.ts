@@ -43,7 +43,7 @@ export class LoadingScene extends Phaser.Scene {
       duration: 650,
       yoyo: true,
       repeat: 2,
-      onComplete: () => this.scene.start('GardenScene')
+      onComplete: () => this.scene.start('QuizScene')
     });
   }
 }
