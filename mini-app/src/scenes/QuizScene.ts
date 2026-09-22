@@ -124,6 +124,8 @@ export class QuizScene extends Phaser.Scene {
       fontStyle: 'bold'
     }).setOrigin(1, 0.5).setAlpha(0);
 
+    this.questionMetaTexts = [archiveLabel, mark];
+
     this.questionText = this.add.text(width / 2, height * 0.235, question.text, {
       fontFamily: 'sans-serif',
       fontSize: '21px',
@@ -187,7 +189,6 @@ export class QuizScene extends Phaser.Scene {
       this.tweens.add({
         targets: [card, number, button],
         alpha: 1,
-        y: '-=10',
         duration: 280,
         delay: 100 + index * 70,
         ease: 'Cubic.easeOut'
@@ -333,7 +334,7 @@ export class QuizScene extends Phaser.Scene {
       this.feedbackText?.setText(`CORRECT  +${question.xp} XP`).setColor('#4f7651');
       this.playAnswerSound('correct-answer');
       this.animateCorrectFeedback(this.selected);
-      this.animateXPGain(question.xp);
+      this.animateXPGain(question.xp, this.selected);
     } else {
       this.feedbackText
         ?.setText(
@@ -499,6 +500,7 @@ export class QuizScene extends Phaser.Scene {
       ...this.optionNumbers,
       ...this.progressObjects,
       ...(this.questionFrame ? [this.questionFrame] : []),
+      ...this.questionMetaTexts,
       ...(this.questionText ? [this.questionText] : []),
       ...(this.feedbackText ? [this.feedbackText] : [])
     ];
@@ -518,7 +520,7 @@ export class QuizScene extends Phaser.Scene {
   }
 
   private animateXPGain(amount: number, optionIndex: number): void {
-    const { width } = this.scale;
+    const { width, height } = this.scale;
 
     const floating = this.add.text(
       width * 0.50,
@@ -527,8 +529,8 @@ export class QuizScene extends Phaser.Scene {
       {
       fontFamily: 'monospace',
       fontSize: '15px',
-      color: '#7b315f',
-        fontStyle: 'bold'
+      color: '#4f7651',
+      fontStyle: 'bold'
       }
     ).setOrigin(0.5);
 
@@ -612,6 +614,9 @@ export class QuizScene extends Phaser.Scene {
 
     this.questionFrame?.destroy();
     this.questionFrame = undefined;
+
+    this.questionMetaTexts.forEach((text) => text.destroy());
+    this.questionMetaTexts = [];
 
     this.optionButtons.forEach((button) => button.destroy());
     this.optionButtons = [];
