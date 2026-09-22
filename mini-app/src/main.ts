@@ -3,6 +3,7 @@ import { BootScene } from './scenes/BootScene';
 import { LoadingScene } from './scenes/LoadingScene';
 import { GardenScene } from './scenes/GardenScene';
 import { QuizScene } from './scenes/QuizScene';
+import { QuizIntroScene } from './scenes/QuizIntroScene';
 import './styles.css';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -17,7 +18,7 @@ const config: Phaser.Types.Core.GameConfig = {
     width: 390,
     height: 844
   },
-  scene: [BootScene, LoadingScene, GardenScene, QuizScene]
+  scene: [BootScene, LoadingScene, QuizIntroScene, QuizScene]
 };
 
 new Phaser.Game(config);
