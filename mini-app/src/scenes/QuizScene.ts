@@ -17,6 +17,7 @@ export class QuizScene extends Phaser.Scene {
   private questionText?: Phaser.GameObjects.Text;
   private feedbackText?: Phaser.GameObjects.Text;
   private questionFrame?: Phaser.GameObjects.Graphics;
+  private questionMetaTexts: Phaser.GameObjects.Text[] = [];
   private submitButton?: Phaser.GameObjects.Text;
   private optionButtons: Phaser.GameObjects.Text[] = [];
   private optionCards: Phaser.GameObjects.Graphics[] = [];
