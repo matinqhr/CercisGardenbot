@@ -110,9 +110,9 @@ export class QuizScene extends Phaser.Scene {
     });
 
     this.submitButton.setText(this.currentIndex + 1 < this.questions.length ? 'NEXT' : 'ROUND COMPLETE');
-    this.submitButton.removeInteractive();
+    this.submitButton.removeAllListeners('pointerdown');
     this.submitButton.setInteractive({ useHandCursor: true });
-    this.submitButton.once('pointerdown', () => {
+    this.submitButton.on('pointerdown', () => {
       if (this.currentIndex + 1 < this.questions.length) {
         this.currentIndex += 1;
         this.renderQuestion();
