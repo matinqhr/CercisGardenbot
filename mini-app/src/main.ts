@@ -13,7 +13,6 @@ const config: Phaser.Types.Core.GameConfig = {
   antialias: true,
   pixelArt: false,
   roundPixels: false,
-  resolution: Math.min(window.devicePixelRatio || 1, 3),
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
