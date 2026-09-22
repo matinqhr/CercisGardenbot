@@ -11,6 +11,8 @@ export class QuizScene extends Phaser.Scene {
   private answered = false;
   private xp = 0;
   private roundXP = 0;
+  private correctCount = 0;
+  private casesReceived = 0;
 
   private questionNumberText?: Phaser.GameObjects.Text;
   private xpText?: Phaser.GameObjects.Text;
@@ -31,6 +33,10 @@ export class QuizScene extends Phaser.Scene {
   preload(): void {
     this.load.audio('correct-answer', '/audio/correct.mp3');
     this.load.audio('wrong-answer', '/audio/wrong.mp3');
+    this.load.audio('round-complete', '/audio/round-complete.mp3');
+    this.load.audio('score-reveal', '/audio/score-reveal.mp3');
+    this.load.audio('correct-count', '/audio/correct-count.mp3');
+    this.load.audio('case-count', '/audio/case-count.mp3');
   }
 
   create(): void {
@@ -39,6 +45,8 @@ export class QuizScene extends Phaser.Scene {
 
     this.xp = getXP();
     this.roundXP = 0;
+    this.correctCount = 0;
+    this.casesReceived = 0;
     this.questions = this.pickRound();
 
     this.createHeader();
@@ -329,6 +337,7 @@ export class QuizScene extends Phaser.Scene {
     this.answered = true;
 
     if (isCorrect) {
+      this.correctCount += 1;
       this.xp = addXP(question.xp);
       this.roundXP += question.xp;
       this.xpText?.setText(`XP ${this.xp}`);
@@ -563,46 +572,102 @@ export class QuizScene extends Phaser.Scene {
     this.questionNumberText?.setText('ROUND COMPLETE');
     this.xpText?.setText(`XP ${this.xp}`);
 
-    const title = this.add.text(width / 2, height * 0.35, 'ROUND COMPLETE', {
-      fontFamily: 'monospace',
-      fontSize: '22px',
-      color: '#211f1d'
-    }).setOrigin(0.5).setAlpha(0);
+    // End-of-round reveal is deliberately staged:
+    // sound → silence → XP → correct count → case count → new round.
+    this.playEndRoundSound('round-complete');
 
-    const gained = this.add.text(width / 2, height * 0.44, `+${this.roundXP} XP THIS ROUND`, {
-      fontFamily: 'monospace',
-      fontSize: '18px',
-      color: '#4f7651'
-    }).setOrigin(0.5).setAlpha(0);
+    this.time.delayedCall(1500, () => {
+      const gained = this.add.text(width / 2, height * 0.36, `+${this.roundXP} XP THIS ROUND`, {
+        fontFamily: 'monospace',
+        fontSize: '21px',
+        color: '#4f7651',
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setAlpha(0).setScale(0.94);
 
-    const total = this.add.text(width / 2, height * 0.50, `TOTAL XP  ${this.xp}`, {
-      fontFamily: 'monospace',
-      fontSize: '16px',
-      color: '#7b315f'
-    }).setOrigin(0.5).setAlpha(0);
+      this.revealEndRoundText(gained);
+      this.playEndRoundSound('score-reveal');
 
-    const next = this.add.text(width / 2, height * 0.65, 'NEW ROUND', {
-      fontFamily: 'monospace',
-      fontSize: '16px',
-      color: '#fff8e8',
-      backgroundColor: '#7b315f',
-      padding: { left: 30, right: 30, top: 11, bottom: 11 }
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setAlpha(0);
+      this.time.delayedCall(1200, () => {
+        const correct = this.add.text(width / 2, height * 0.47, `${this.correctCount} / ${this.questions.length} CORRECT`, {
+          fontFamily: 'monospace',
+          fontSize: '19px',
+          color: '#211f1d',
+          fontStyle: 'bold'
+        }).setOrigin(0.5).setAlpha(0).setScale(0.94);
 
-    this.tweens.add({
-      targets: [title, gained, total],
-      alpha: 1,
-      y: '-=10',
-      duration: 350,
-      ease: 'Cubic.easeOut'
+        this.revealEndRoundText(correct);
+        this.playEndRoundSound('correct-count');
+
+        this.time.delayedCall(1200, () => {
+          const cases = this.add.text(width / 2, height * 0.58, `${this.casesReceived} CASES RECEIVED`, {
+            fontFamily: 'monospace',
+            fontSize: '18px',
+            color: '#7b315f',
+            fontStyle: 'bold'
+          }).setOrigin(0.5).setAlpha(0).setScale(0.94);
+
+          this.revealEndRoundText(cases);
+          this.playEndRoundSound('case-count');
+
+          this.time.delayedCall(900, () => {
+            const total = this.add.text(width / 2, height * 0.66, `TOTAL XP  ${this.xp}`, {
+              fontFamily: 'monospace',
+              fontSize: '15px',
+              color: '#9b8490'
+            }).setOrigin(0.5).setAlpha(0);
+
+            const next = this.add.text(width / 2, height * 0.76, 'NEW ROUND', {
+              fontFamily: 'monospace',
+              fontSize: '16px',
+              color: '#fff8e8',
+              backgroundColor: '#7b315f',
+              padding: { left: 30, right: 30, top: 11, bottom: 11 }
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setAlpha(0);
+
+            this.revealEndRoundText(total, 260);
+            this.tweens.add({
+              targets: next,
+              alpha: 1,
+              y: '-=8',
+              duration: 300,
+              ease: 'Back.easeOut'
+            });
+
+            next.on('pointerover', () => this.tweens.add({ targets: next, scale: 1.04, duration: 100 }));
+            next.on('pointerout', () => this.tweens.add({ targets: next, scale: 1, duration: 100 }));
+            next.on('pointerdown', () => this.scene.restart());
+          });
+        });
+      });
     });
-    this.tweens.add({ targets: next, alpha: 1, y: '-=10', duration: 300, delay: 220, ease: 'Back.easeOut' });
-
-    next.on('pointerover', () => this.tweens.add({ targets: next, scale: 1.04, duration: 100 }));
-    next.on('pointerout', () => this.tweens.add({ targets: next, scale: 1, duration: 100 }));
-    next.on('pointerdown', () => this.scene.restart());
   }
 
+  private playEndRoundSound(key: 'round-complete' | 'score-reveal' | 'correct-count' | 'case-count'): void {
+    if (!this.cache.audio.exists(key)) return;
+
+    const sound = this.sound.get(key);
+    if (sound) {
+      sound.stop();
+      sound.play();
+    } else {
+      this.sound.play(key, { volume: 0.85 });
+    }
+  }
+
+  private revealEndRoundText(
+    target: Phaser.GameObjects.Text,
+    duration = 320
+  ): void {
+    this.tweens.add({
+      targets: target,
+      alpha: 1,
+      scale: 1,
+      y: '-=8',
+      duration,
+      ease: 'Cubic.easeOut'
+    });
+  }
+}
   private clearQuestionUI(): void {
     this.questionText?.destroy();
     this.questionText = undefined;
