@@ -17,23 +17,25 @@ export class LoadingScene extends Phaser.Scene {
       spacing: 0,
       margin: 0
     });
+
+    this.load.image('cercis-logo', '/images/cercis-logo.png');
+    this.load.image('cercis-head', '/images/cercis-head.png');
   }
 
   create(): void {
     const { width, height } = this.scale;
 
+    this.cameras.main.setBackgroundColor('#7b315f');
     this.add.rectangle(width / 2, height / 2, width, height, 0x7b315f);
 
-    const logo = this.add.text(width / 2, height / 2 - 20, 'CERCIS', {
-      fontFamily: 'monospace',
-      fontSize: '42px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
+    const logo = this.add.image(width / 2, height / 2 - 18, 'cercis-logo')
+      .setOrigin(0.5)
+      .setDisplaySize(Math.min(width * 0.72, 330), Math.min(width * 0.72, 330) * 0.28);
 
-    this.add.text(width / 2, height / 2 + 28, 'ARCHIVE—SAFE', {
-      fontFamily: 'monospace',
-      fontSize: '12px',
+    this.add.text(width / 2, height / 2 + 70, 'آرشیو — امن', {
+      fontFamily: 'Samim',
+      fontSize: '13px',
+      fontStyle: '500',
       color: '#f2dce8'
     }).setOrigin(0.5);
 
@@ -43,7 +45,7 @@ export class LoadingScene extends Phaser.Scene {
       duration: 650,
       yoyo: true,
       repeat: 2,
-      onComplete: () => this.scene.start('QuizScene')
+      onComplete: () => this.scene.start('QuizIntroScene')
     });
   }
 }
