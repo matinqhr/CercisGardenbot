@@ -6,11 +6,11 @@ async function pagePicker(e,c,qmsg,id,current,total){
  const rows=[];
  for(let n=1;n<=total;n+=4){
    const row=[];
-   for(let p=n;p<Math.min(n+4,total+1);p++)row.push({text:String(p).replace(/\\d/g,d=>"۰۱۲۳۴۵۶۷۸۹"[d]),callback_data:`book_pick:${id}:${p}`});
+   for(let p=n;p<Math.min(n+4,total+1);p++)row.push({text:String(p).replace(/\d/g,d=>"۰۱۲۳۴۵۶۷۸۹"[d]),callback_data:`book_pick:${id}:${p}`});
    rows.push(row);
  }
  rows.push([{text:"🔙 بازگشت به صفحه",callback_data:`book_back:${id}:${current}`}]);
- const b={chat_id:c,text:"📖 <b>انتخاب صفحه</b>\\n\\nصفحهٔ موردنظر را انتخاب کنید:",parse_mode:"HTML",reply_markup:{inline_keyboard:rows}};
+ const b={chat_id:c,text:"📖 <b>انتخاب صفحه</b>\n\nصفحهٔ موردنظر را انتخاب کنید:",parse_mode:"HTML",reply_markup:{inline_keyboard:rows}};
  const mid=qmsg?.message_id;
  if(mid&&!mediaMessage(qmsg)){
    const x=await tg(e,"editMessageText",{...b,message_id:mid});
@@ -24,4 +24,4 @@ async function list(e,c,qmsg,page=0,backId=null,backPage=1){const rows=(await e.
 export default{async fetch(req,e){if(req.method!=="POST")return import("./admin-book-gate-v2.js").then(m=>m.default.fetch(req,e));let u;try{u=await req.clone().json()}catch{return import("./admin-book-gate-v2.js").then(m=>m.default.fetch(req,e))}const q=u?.callback_query,d=String(q?.data||"");if(q?.id)await tg(e,"answerCallbackQuery",{callback_query_id:q.id});if(d==="book_noop")return new Response("ok",{status:200});
 let m=d.match(/^book_goto:(\\d+):(\\d+)$/);if(m){const id=Number(m[1]),current=Number(m[2]),r=await e.DB.prepare("SELECT details2 FROM tracks WHERE id=?").bind(id).first(),total=parts(r?.details2).length;if(!total)return out(await tg(e,"sendMessage",{chat_id:q.message.chat.id,text:"❌ پرونده پیدا نشد."}));return pagePicker(e,q.message.chat.id,q.message,id,current,total)}
 m=d.match(/^book_back:(\\d+):(\\d+)$/);if(m)return sendPage(e,q.message.chat.id,Number(m[1]),Number(m[2])||1,q.message,"list");
-m=d.match(/^book_pick:(\\d+):(\\d+)$/);if(m)return sendPage(e,q.message.chat.id,Number(m[1]),Number(m[2])||1,q.message,"list");if(d==="book_index")return list(e,q.message.chat.id,q.message,0);let m=d.match(/^book_index:(\d+):(\d+)$/);if(m)return list(e,q.message.chat.id,q.message,0,Number(m[1]),Number(m[2]));m=d.match(/^book_index:(\d+):(\d+):list:(\d+)$/);if(m)return list(e,q.message.chat.id,q.message,Number(m[3]),Number(m[1]),Number(m[2]));if(d.startsWith("book:")){const [,id,p]=d.split(":");return sendPage(e,q.message.chat.id,Number(id),Number(p)||1,q.message,"list")}return import("./admin-book-gate-v2.js").then(m=>m.default.fetch(new Request(req.url,{method:req.method,headers:req.headers,body:JSON.stringify(u)}),e))}};
+m=d.match(/^book_pick:(\\d+):(\\d+)$/);if(m)return sendPage(e,q.message.chat.id,Number(m[1]),Number(m[2])||1,q.message,"list");if(d==="book_index")return list(e,q.message.chat.id,q.message,0);m=d.match(/^book_index:(\d+):(\d+)$/);if(m)return list(e,q.message.chat.id,q.message,0,Number(m[1]),Number(m[2]));m=d.match(/^book_index:(\d+):(\d+):list:(\d+)$/);if(m)return list(e,q.message.chat.id,q.message,Number(m[3]),Number(m[1]),Number(m[2]));if(d.startsWith("book:")){const [,id,p]=d.split(":");return sendPage(e,q.message.chat.id,Number(id),Number(p)||1,q.message,"list")}return import("./admin-book-gate-v2.js").then(m=>m.default.fetch(new Request(req.url,{method:req.method,headers:req.headers,body:JSON.stringify(u)}),e))}};
