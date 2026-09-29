@@ -30,7 +30,7 @@ async function routeCallback(req,e,ctx,u){const q=u?.callback_query;if(!q)return
  if(d==="panel"&&admin(e,id))return ensureResponse(import("./admin-panel.js").then(x=>x.default.fetch(req,e,ctx)));
  if(d==="help"||d==="public_start")return ensureResponse(import("./start-handler.js").then(x=>x.default.fetch(req,e,ctx)));
  if(d==="public_list"||d==="public_list:0:0"||d.startsWith("public_list:"))return ensureResponse(import("./public-list-handler.js").then(x=>x.default.fetch(req,e,ctx)));
- if(d==="book_index"||d.startsWith("book:")||d.startsWith("book_index:")||d==="book_noop")return ensureResponse(import("./public-book-gate.js").then(x=>x.default.fetch(req,e,ctx)));
+ if(d==="book_index"||d.startsWith("book:")||d.startsWith("book_index:")||d.startsWith("book_goto:")||d.startsWith("book_pick:")||d.startsWith("book_back:")||d==="book_noop")return ensureResponse(import("./public-book-gate.js").then(x=>x.default.fetch(req,e,ctx)));
  if(d.startsWith("flashpub:"))return ensureResponse(import("./flashcard-public-list-gate.js").then(x=>x.default.fetch(req,e,ctx)));
  if(d.startsWith("flash:")||d.startsWith("flash_index:")||d==="flash_noop")return ensureResponse(import("./flashcard-gate.js").then(x=>x.default.fetch(req,e,ctx)));
  if(admin(e,id))return ensureResponse(import("./fix-router.js").then(x=>x.default.fetch(req,e,ctx)));
