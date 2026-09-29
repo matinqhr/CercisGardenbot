@@ -3,7 +3,8 @@ const resp=x=>new Response(JSON.stringify(x),{status:200,headers:{"content-type"
 export const parts=v=>{try{const x=JSON.parse(v||"[]");return Array.isArray(x)?x.filter(p=>p&&(p.text||p.caption||p.media_file_id||p.source_message_id||p.rich_message)):[]}catch{return[]}};
 const inputRichBlock=b=>{if(!b||typeof b!=="object")return b;const x={...b};switch(x.type){case"photo":if(x.photo?.file_id)x.photo={type:"photo",media:x.photo.file_id};else if(Array.isArray(x.photo)&&x.photo.length)x.photo={type:"photo",media:x.photo.at(-1).file_id};break;case"video":if(x.video?.file_id)x.video={type:"video",media:x.video.file_id};break;case"audio":if(x.audio?.file_id)x.audio={type:"audio",media:x.audio.file_id};break;case"document":if(x.document?.file_id)x.document={type:"document",media:x.document.file_id};break;case"animation":if(x.animation?.file_id)x.animation={type:"animation",media:x.animation.file_id};break;case"voice_note":if(x.voice_note?.file_id)x.voice_note={type:"voice_note",media:x.voice_note.file_id};break;case"collage":case"slideshow":case"blockquote":case"details":if(Array.isArray(x.blocks))x.blocks=x.blocks.map(inputRichBlock);break;case"list":if(Array.isArray(x.items))x.items=x.items.map(i=>({...i,blocks:Array.isArray(i.blocks)?i.blocks.map(inputRichBlock):i.blocks}));break;case"table":if(Array.isArray(x.cells))x.cells=x.cells.map(row=>Array.isArray(row)?row.map(cell=>cell&&Array.isArray(cell.blocks)?{...cell,blocks:cell.blocks.map(inputRichBlock)}:cell):row);break}return x};
 const inputRich=r=>r?{...r,blocks:Array.isArray(r.blocks)?r.blocks.map(inputRichBlock):r.blocks}:r;
-const pageLabel=(i,n)=>`صفحه ${i+1} از ${n}`;
+const faDigits=n=>String(n).replace(/\d/g,d=>"۰۱۲۳۴۵۶۷۸۹"[d]);
+const pageLabel=(i,n)=>`صفحه ${faDigits(i+1)} از ${faDigits(n)}`;
 const richWithPage=(r,i,n)=>{
   const x=inputRich(r);
   if(!x)return x;
