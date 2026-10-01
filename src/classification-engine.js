@@ -25,11 +25,8 @@ const ensure=async e=>{
 const setting=async e=>e.DB.prepare("SELECT * FROM classification_settings WHERE id=1").first();
 const children=async(e,parent,mode="cercis")=>{
  if(mode==="count"){
-  const sql=parent==null?
-   "WITH RECURSIVE tree(id) AS (SELECT id FROM classification_categories WHERE parent_id IS NULL UNION ALL SELECT c.id FROM classification_categories c JOIN tree t ON c.parent_id=t.id) SELECT c.*,COUNT(DISTINCT p.post_id) n FROM classification_categories c LEFT JOIN (SELECT DISTINCT n.category_id,pp.post_id FROM home_post_path_nodes n JOIN home_post_paths pp ON pp.id=n.path_id) x ON x.category_id IN (SELECT id FROM tree WHERE id=c.id UNION ALL SELECT id FROM classification_categories WHERE parent_id=c.id) LEFT JOIN home_post_paths p ON p.post_id=x.post_id WHERE c.parent_id IS NULL GROUP BY c.id ORDER BY n DESC,c.sort_order ASC,c.id ASC":
-   "WITH RECURSIVE tree(id) AS (SELECT id FROM classification_categories WHERE id=? UNION ALL SELECT c.id FROM classification_categories c JOIN tree t ON c.parent_id=t.id) SELECT c.*,COUNT(DISTINCT x.post_id) n FROM classification_categories c LEFT JOIN (SELECT DISTINCT n.category_id,pp.post_id FROM home_post_path_nodes n JOIN home_post_paths pp ON pp.id=n.path_id) x ON x.category_id IN (SELECT id FROM tree) WHERE c.parent_id=? GROUP BY c.id ORDER BY n DESC,c.sort_order ASC,c.id ASC";
-  if(parent==null){const r=await e.DB.prepare(sql).all();return r.results||[]}
-  const r=await e.DB.prepare(sql).bind(parent,parent).all();return r.results||[];
+  const sql="WITH RECURSIVE tree(root,id) AS (SELECT id,id FROM classification_categories UNION ALL SELECT t.root,c.id FROM classification_categories c JOIN tree t ON c.parent_id=t.id) SELECT c.*,COUNT(DISTINCT pp.post_id) n FROM classification_categories c LEFT JOIN tree t ON t.root=c.id LEFT JOIN home_post_path_nodes pn ON pn.category_id=t.id LEFT JOIN home_post_paths pp ON pp.id=pn.path_id "+(parent==null?"WHERE c.parent_id IS NULL":"WHERE c.parent_id=?")+" GROUP BY c.id ORDER BY n DESC,c.sort_order ASC,c.id ASC";
+  const r=parent==null?await e.DB.prepare(sql).all():await e.DB.prepare(sql).bind(parent).all();return r.results||[];
  }
  const order=mode==="alphabetical"?"name COLLATE NOCASE ASC,sort_order ASC,id ASC":"sort_order ASC,id ASC";
  const sql=parent==null?"SELECT * FROM classification_categories WHERE parent_id IS NULL ORDER BY "+order:"SELECT * FROM classification_categories WHERE parent_id=? ORDER BY "+order;
