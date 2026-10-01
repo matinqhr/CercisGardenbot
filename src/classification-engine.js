@@ -24,17 +24,17 @@ const ensure=async e=>{
 
 const setting=async e=>e.DB.prepare("SELECT * FROM classification_settings WHERE id=1").first();
 const children=async(e,parent,mode="cercis")=>{
- const order=mode==="alphabetical"?"name COLLATE NOCASE ASC,sort_order ASC,id ASC":mode==="count"?"sort_order ASC,id ASC":"sort_order ASC,id ASC";
  if(mode==="count"){
   const sql=parent==null?
-   "SELECT c.*,COUNT(DISTINCT n2.path_id) n FROM classification_categories c LEFT JOIN home_post_path_nodes n2 ON n2.category_id=c.id LEFT JOIN home_post_paths p ON p.id=n2.path_id WHERE c.parent_id IS NULL GROUP BY c.id ORDER BY n DESC,c.sort_order ASC,c.id ASC":
-   "SELECT c.*,COUNT(DISTINCT p.post_id) n FROM classification_categories c LEFT JOIN classification_categories d ON d.id=c.id OR d.parent_id=c.id LEFT JOIN home_post_path_nodes n2 ON n2.category_id=d.id LEFT JOIN home_post_paths p ON p.id=n2.path_id WHERE c.parent_id=? GROUP BY c.id ORDER BY n DESC,c.sort_order ASC,c.id ASC";
-  const r=parent==null?await e.DB.prepare(sql).all():await e.DB.prepare(sql).bind(parent).all();return r.results||[];
+   "WITH RECURSIVE tree(id) AS (SELECT id FROM classification_categories WHERE parent_id IS NULL UNION ALL SELECT c.id FROM classification_categories c JOIN tree t ON c.parent_id=t.id) SELECT c.*,COUNT(DISTINCT p.post_id) n FROM classification_categories c LEFT JOIN (SELECT DISTINCT n.category_id,pp.post_id FROM home_post_path_nodes n JOIN home_post_paths pp ON pp.id=n.path_id) x ON x.category_id IN (SELECT id FROM tree WHERE id=c.id UNION ALL SELECT id FROM classification_categories WHERE parent_id=c.id) LEFT JOIN home_post_paths p ON p.post_id=x.post_id WHERE c.parent_id IS NULL GROUP BY c.id ORDER BY n DESC,c.sort_order ASC,c.id ASC":
+   "WITH RECURSIVE tree(id) AS (SELECT id FROM classification_categories WHERE id=? UNION ALL SELECT c.id FROM classification_categories c JOIN tree t ON c.parent_id=t.id) SELECT c.*,COUNT(DISTINCT x.post_id) n FROM classification_categories c LEFT JOIN (SELECT DISTINCT n.category_id,pp.post_id FROM home_post_path_nodes n JOIN home_post_paths pp ON pp.id=n.path_id) x ON x.category_id IN (SELECT id FROM tree) WHERE c.parent_id=? GROUP BY c.id ORDER BY n DESC,c.sort_order ASC,c.id ASC";
+  if(parent==null){const r=await e.DB.prepare(sql).all();return r.results||[]}
+  const r=await e.DB.prepare(sql).bind(parent,parent).all();return r.results||[];
  }
+ const order=mode==="alphabetical"?"name COLLATE NOCASE ASC,sort_order ASC,id ASC":"sort_order ASC,id ASC";
  const sql=parent==null?"SELECT * FROM classification_categories WHERE parent_id IS NULL ORDER BY "+order:"SELECT * FROM classification_categories WHERE parent_id=? ORDER BY "+order;
  const r=parent==null?await e.DB.prepare(sql).all():await e.DB.prepare(sql).bind(parent).all();return r.results||[];
 };
-
 const postPaths=async(e,postId)=>((await e.DB.prepare("SELECT p.id,p.sort_order,p.created_at,(SELECT GROUP_CONCAT(c.name,' → ') FROM home_post_path_nodes n JOIN classification_categories c ON c.id=n.category_id WHERE n.path_id=p.id ORDER BY n.level) path FROM home_post_paths p WHERE p.post_id=? ORDER BY p.sort_order,p.id").bind(postId).all()).results||[]);
 const pathNodes=async(e,pathId)=>((await e.DB.prepare("SELECT n.level,n.category_id,c.name,c.parent_id FROM home_post_path_nodes n JOIN classification_categories c ON c.id=n.category_id WHERE n.path_id=? ORDER BY n.level").bind(pathId).all()).results||[]);
 const createPath=async(e,postId)=>{const mx=await e.DB.prepare("SELECT COALESCE(MAX(sort_order),0) n FROM home_post_paths WHERE post_id=?").bind(postId).first();const r=await e.DB.prepare("INSERT INTO home_post_paths(post_id,sort_order) VALUES(?,?) RETURNING id").bind(postId,Number(mx?.n||0)+1).first();return Number(r?.id||0);};
