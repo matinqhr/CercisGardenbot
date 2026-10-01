@@ -22,7 +22,7 @@ const render=async(e,q)=>{
  const status=r?.status==="deleted"?"🔴 حذف‌شده":r?.status==="classified"?"🟢 طبقه‌بندی‌شده":"🟡 آماده بررسی";
  const path=p.length?p.map(x=>x.name).join(" → "):"هنوز مسیری ثبت نشده است";
  const text="⚙️ <b>موتور پیشرفته طبقه‌بندی</b>\n\n📌 پست #"+id+"\n🔗 <a href=\"https://t.me/"+HOME+"/"+id+"\">مشاهده پست</a>\n\nوضعیت: "+status+"\n\n<b>🗂 مسیر کتابخانه:</b>\n"+esc(path)+"\n\n📝 پیش‌فرض این است که پست وجود دارد؛ فقط اگر واقعاً حذف شده بود، «پست حذف شده» را بزن.";
- const kb=[[{text:"👀 مشاهده پست",url:"https://t.me/"+HOME+"/"+id}],[{text:"🗂 ساخت/ویرایش مسیر",callback_data:"ce_path:"+id}],[{text:"🔑 کلیدواژه",callback_data:"ce_kw:"+id}],[{text:"❤️ صف پرونده‌های آینده",callback_data:"ce_future:"+id}],[{text:"❌ پست حذف شده",callback_data:"ce_deleted:"+id}],[{text:"◀️ قبلی",callback_data:"ce_prev:"+id},{text:"بعدی ▶️",callback_data:"ce_next:"+id}],[{text:s.enabled?"⏸ خاموش کردن موتور":"▶️ روشن کردن موتور",callback_data:"ce_toggle"}],[{text:s.library_enabled?"🔴 مخفی‌کردن کتابخانه از Start":"🟢 نمایش کتابخانه در Start",callback_data:"ce_library_toggle"}],[{text:"🔙 پنل مدیریت",callback_data:"panel"}]];
+ const kb=[[{text:"👀 مشاهده پست",url:"https://t.me/"+HOME+"/"+id}],[{text:"🗂 ساخت/ویرایش مسیر",callback_data:"ce_path:"+id},{text:"🌳 مدیریت ساختار",callback_data:"ce_tree"}],[{text:"🔑 کلیدواژه",callback_data:"ce_kw:"+id}],[{text:"❤️ صف پرونده‌های آینده",callback_data:"ce_future:"+id}],[{text:"❌ پست حذف شده",callback_data:"ce_deleted:"+id}],[{text:"◀️ قبلی",callback_data:"ce_prev:"+id},{text:"بعدی ▶️",callback_data:"ce_next:"+id}],[{text:s.enabled?"⏸ خاموش کردن موتور":"▶️ روشن کردن موتور",callback_data:"ce_toggle"}],[{text:s.library_enabled?"🔴 مخفی‌کردن کتابخانه از Start":"🟢 نمایش کتابخانه در Start",callback_data:"ce_library_toggle"}],[{text:"🔙 پنل مدیریت",callback_data:"panel"}]];
  return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text,parse_mode:"HTML",reply_markup:{inline_keyboard:kb}}));
 };
 const pathMenu=async(e,q,id,level)=>{
@@ -48,7 +48,7 @@ const treeRoot=async(e,q)=>{
  const rows=cs.results||[];
  const buttons=rows.map(c=>[{text:(c.active?"🟢 ":"🔴 ")+c.name,callback_data:"ce_tree_cat:"+c.id}]);
  buttons.push([{text:"➕ طبقه اصلی جدید",callback_data:"ce_tree_new:0"}],[{text:"🔙 موتور طبقه‌بندی",callback_data:"classification_engine"}]);
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🌳 <b>مدیریت ساختار کتابخانه</b>\\n\\nطبقه‌های اصلی کتابخانه را می‌بینی. برای مدیریت هر شاخه وارد آن شو:",parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🌳 <b>مدیریت ساختار کتابخانه</b>\n\nطبقه‌های اصلی کتابخانه را می‌بینی. برای مدیریت هر شاخه وارد آن شو:",parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
 };
 const treeCat=async(e,q,cid)=>{
  const c=await e.DB.prepare("SELECT * FROM classification_categories WHERE id=?").bind(cid).first();if(!c)return treeRoot(e,q);
@@ -56,7 +56,7 @@ const treeCat=async(e,q,cid)=>{
  const buttons=sub.map(x=>[{text:(x.active?"🟢 ":"🔴 ")+x.name,callback_data:"ce_tree_cat:"+x.id}]);
  buttons.push([{text:"➕ زیرطبقه جدید",callback_data:"ce_tree_new:"+cid}],[{text:"✏️ تغییر نام",callback_data:"ce_tree_rename:"+cid}],[{text:"↕️ تغییر ترتیب",callback_data:"ce_tree_order:"+cid}],[{text:c.active?"🔴 غیرفعال کردن":"🟢 فعال کردن",callback_data:"ce_tree_active:"+cid}]);
  if(c.parent_id!=null)buttons.push([{text:"⬆️ بازگشت به والد",callback_data:"ce_tree_cat:"+c.parent_id}]);else buttons.push([{text:"⬅️ فهرست طبقات اصلی",callback_data:"ce_tree"}]);
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🌳 <b>ساختار کتابخانه</b>\\n\\nمسیر: <b>"+esc(c.name)+"</b>\\nوضعیت: "+(c.active?"🟢 فعال":"🔴 غیرفعال")+"\\n\\nزیرطبقه‌ها: "+(sub.length||"ندارد"),parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🌳 <b>ساختار کتابخانه</b>\n\nمسیر: <b>"+esc(c.name)+"</b>\nوضعیت: "+(c.active?"🟢 فعال":"🔴 غیرفعال")+"\n\nزیرطبقه‌ها: "+(sub.length||"ندارد"),parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
 };
 const treePrompt=async(e,q,step,cid,draft={})=>{
  await e.DB.prepare("INSERT INTO sessions(user_id,step,channel,post_id,url,draft,updated_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET step=excluded.step,channel=excluded.channel,post_id=excluded.post_id,url=excluded.url,draft=excluded.draft,updated_at=CURRENT_TIMESTAMP").bind(q.from.id,step,HOME,cid||0,"https://t.me/"+HOME+"/"+(cid||0),JSON.stringify(draft)).run();
@@ -68,7 +68,7 @@ const treeOrder=async(e,q,cid)=>{
  const sib=(await e.DB.prepare("SELECT id,name,sort_order FROM classification_categories WHERE parent_id IS ? ORDER BY sort_order,id").bind(c.parent_id).all()).results||[];
  const buttons=sib.map(x=>[{text:(Number(x.id)===Number(cid)?"➡️ ":"")+x.name,callback_data:"ce_tree_orderpick:"+cid+":"+x.id}]);
  buttons.push([{text:"🔙 بازگشت",callback_data:"ce_tree_cat:"+cid}]);
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"↕️ <b>ترتیب زیرشاخه‌ها</b>\\n\\nیک طبقه را انتخاب کن؛ بعد آن را یک خانه بالا یا پایین می‌بریم.",parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"↕️ <b>ترتیب زیرشاخه‌ها</b>\n\nیک طبقه را انتخاب کن؛ بعد آن را یک خانه بالا یا پایین می‌بریم.",parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
 };
 const publicTree=async(e,q,parent)=>{
  const cs=await children(e,parent),buttons=cs.map(c=>[{text:c.name,callback_data:"home_cat:"+c.id}]);
