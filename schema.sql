@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   channel TEXT,
   post_id INTEGER,
   url TEXT,
+  draft TEXT,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
