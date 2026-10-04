@@ -35,7 +35,7 @@ const children=async(e,parent,mode="cercis")=>{
 const postPaths=async(e,postId)=>((await e.DB.prepare("SELECT p.id,p.sort_order,p.created_at,(SELECT GROUP_CONCAT(c.name,' → ') FROM home_post_path_nodes n JOIN classification_categories c ON c.id=n.category_id WHERE n.path_id=p.id ORDER BY n.level) path FROM home_post_paths p WHERE p.post_id=? ORDER BY p.sort_order,p.id").bind(postId).all()).results||[]);
 const pathNodes=async(e,pathId)=>((await e.DB.prepare("SELECT n.level,n.category_id,c.name,c.parent_id FROM home_post_path_nodes n JOIN classification_categories c ON c.id=n.category_id WHERE n.path_id=? ORDER BY n.level").bind(pathId).all()).results||[]);
 const createPath=async(e,postId)=>{const mx=await e.DB.prepare("SELECT COALESCE(MAX(sort_order),0) n FROM home_post_paths WHERE post_id=?").bind(postId).first();const r=await e.DB.prepare("INSERT INTO home_post_paths(post_id,sort_order) VALUES(?,?) RETURNING id").bind(postId,Number(mx?.n||0)+1).first();return Number(r?.id||0);};
-const dossierMark=async(e,postId)=>{try{const r=await e.DB.prepare("SELECT 1 FROM tracks WHERE post_id=? LIMIT 1").bind(postId).first();return r?" *":""}catch{return""}};
+const dossierMark=async(e,postId)=>{try{const direct=await e.DB.prepare("SELECT 1 FROM tracks WHERE post_id=? LIMIT 1").bind(postId).first();if(direct)return" *";const linked=await e.DB.prepare("SELECT 1 FROM track_links l JOIN tracks t ON t.id=l.track_id WHERE l.post_id=? LIMIT 1").bind(postId).first();return linked?" *":""}catch{return""}};
 
 const render=async(e,q)=>{
  await ensure(e);const s=await setting(e),id=Number(s.next_message_id||1),r=await e.DB.prepare("SELECT * FROM home_archive_posts WHERE message_id=?").bind(id).first(),paths=await postPaths(e,id),mark=await dossierMark(e,id);
@@ -86,7 +86,7 @@ const publicCategory=async(e,q,cid,page=0)=>{
  const pref=await e.DB.prepare("SELECT sort_mode FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first(),mode=String(pref?.sort_mode||"cercis"),sub=await children(e,cid,mode),limit=20,offset=Math.max(0,Number(page)||0)*limit;
  const rows=(await e.DB.prepare("SELECT DISTINCT p.message_id,p.url FROM home_archive_posts p JOIN home_post_paths pp ON pp.post_id=p.message_id JOIN home_post_path_nodes pn ON pn.path_id=pp.id WHERE pn.category_id=? AND p.status!='deleted' ORDER BY p.message_id DESC LIMIT ? OFFSET ?").bind(cid,limit+1,offset).all()).results||[];
  const hasNext=rows.length>limit;rows.splice(limit);
- const posts=[];for(const p of rows){let mark="";try{const d=await e.DB.prepare("SELECT 1 FROM tracks WHERE post_id=? LIMIT 1").bind(p.message_id).first();if(d)mark=" *"}catch{}posts.push({...p,mark})}
+ const posts=[];for(const p of rows){const mark=await dossierMark(e,p.message_id);posts.push({...p,mark})}
  const buttons=sub.map(x=>[{text:x.name+(mode==="count"?" ("+Number(x.n||0)+")":""),callback_data:"home_cat:"+x.id}]);
  buttons.push(...posts.map(x=>[{text:"📌 پست #"+x.message_id+x.mark,url:x.url}]));
  const nav=[];if(page>0)nav.push({text:"◀️ قبلی",callback_data:"home_cat_page:"+cid+":"+(page-1)});if(hasNext)nav.push({text:"بعدی ▶️",callback_data:"home_cat_page:"+cid+":"+(page+1)});if(nav.length)buttons.push(nav);
