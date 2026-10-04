@@ -80,9 +80,6 @@ SELECT DISTINCT
   CURRENT_TIMESTAMP
 FROM home_post_classification pc;
 
--- The current bot stores conversational drafts in sessions; keep the migration schema aligned with it.
-ALTER TABLE sessions ADD COLUMN draft TEXT;
-
 CREATE TABLE IF NOT EXISTS home_post_paths (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   post_id INTEGER NOT NULL,
