@@ -68,6 +68,21 @@ CREATE INDEX classification_categories_parent_order
   ON classification_categories(parent_id, sort_order, id);
 
 -- One Home post may now own any number of independent library paths.
+-- Ensure every legacy classification has an archive record so migrated library paths remain publicly addressable.
+INSERT OR IGNORE INTO home_archive_posts
+  (message_id, channel, url, status, future_dossier, updated_at)
+SELECT DISTINCT
+  pc.post_id,
+  'Arghavanplaylistt',
+  'https://t.me/Arghavanplaylistt/' || pc.post_id,
+  'pending',
+  0,
+  CURRENT_TIMESTAMP
+FROM home_post_classification pc;
+
+-- The current bot stores conversational drafts in sessions; keep the migration schema aligned with it.
+ALTER TABLE sessions ADD COLUMN draft TEXT;
+
 CREATE TABLE IF NOT EXISTS home_post_paths (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   post_id INTEGER NOT NULL,
@@ -113,6 +128,13 @@ WHERE NOT EXISTS (
   FROM home_post_path_nodes n
   WHERE n.path_id = p.id
     AND n.level = pc.level
+);
+
+-- Remove any empty draft paths that may have been created by an interrupted path-creation flow.
+DELETE FROM home_post_paths
+WHERE id NOT IN (
+  SELECT DISTINCT path_id
+  FROM home_post_path_nodes
 );
 
 -- Classification is derived from library paths now; status only tracks pending/deleted.
