@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS classification_settings (
 
 -- Rebuild the category table so duplicate names are allowed under different parents
 -- while sibling names remain unique.
+-- Safe for a manually interrupted rerun: the temporary table is disposable.
+DROP TABLE IF EXISTS classification_categories_v2;
 CREATE TABLE classification_categories_v2 (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -61,10 +63,10 @@ FROM classification_categories;
 DROP TABLE classification_categories;
 ALTER TABLE classification_categories_v2 RENAME TO classification_categories;
 
-CREATE UNIQUE INDEX classification_categories_sibling_name
+CREATE UNIQUE INDEX IF NOT EXISTS classification_categories_sibling_name
   ON classification_categories(COALESCE(parent_id, 0), name);
 
-CREATE INDEX classification_categories_parent_order
+CREATE INDEX IF NOT EXISTS classification_categories_parent_order
   ON classification_categories(parent_id, sort_order, id);
 
 -- One Home post may now own any number of independent library paths.
@@ -87,7 +89,7 @@ CREATE TABLE IF NOT EXISTS home_post_paths (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX home_post_paths_post
+CREATE INDEX IF NOT EXISTS home_post_paths_post
   ON home_post_paths(post_id, sort_order, id);
 
 CREATE TABLE IF NOT EXISTS home_post_path_nodes (
@@ -98,7 +100,7 @@ CREATE TABLE IF NOT EXISTS home_post_path_nodes (
   UNIQUE(path_id, category_id)
 );
 
-CREATE INDEX home_post_path_nodes_category
+CREATE INDEX IF NOT EXISTS home_post_path_nodes_category
   ON home_post_path_nodes(category_id, path_id);
 
 -- Migrate every existing one-path classification into path #1 for that post.
