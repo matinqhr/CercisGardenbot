@@ -1,5 +1,4 @@
-```yaml
-name: Cercis D1 Migration
+name: "Cercis D1 Migration"
 
 on:
   workflow_dispatch:
