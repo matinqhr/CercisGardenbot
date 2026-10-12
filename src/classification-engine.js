@@ -3,7 +3,7 @@ const out=x=>new Response(JSON.stringify(x),{status:200,headers:{"content-type":
 const esc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
 const customEmoji= m=>{const es=Array.isArray(m?.entities)?m.entities:[];const x=es.find(z=>z.type==="custom_emoji"&&z.custom_emoji_id);if(!x)return{emoji:null,emoji_id:null,name:String(m?.text||"").trim()};const raw=String(m.text||"");const glyph=raw.slice(x.offset,x.offset+x.length);const name=(raw.slice(0,x.offset)+raw.slice(x.offset+x.length)).trim();return{emoji:glyph||null,emoji_id:String(x.custom_emoji_id),name}};
 const catHtml=(name,emojiId,emoji)=>{if(!emojiId)return esc(name);const s=String(name||"");const lead=String(emoji||"");const rest=lead&&s.startsWith(lead)?s.slice(lead.length):s;return '<tg-emoji emoji-id="'+esc(emojiId)+'">'+esc(lead||"🌿")+'</tg-emoji>'+esc(rest)};
-const categoryButton=(c,extra="")=>{const name=String(c?.name||"");const emoji=String(c?.emoji||"");const label=c?.emoji_id&&emoji&&name.startsWith(emoji)?name.slice(emoji.length).trimStart():name;return{text:(c?.emoji_id?label:name)+extra,...(c?.emoji_id?{icon_custom_emoji_id:String(c.emoji_id)}:{})}};
+const categoryButton=(c,prefix="",suffix="")=>{const name=String(c?.name||"");const emoji=String(c?.emoji||"");const label=c?.emoji_id&&emoji&&name.startsWith(emoji)?name.slice(emoji.length).trimStart():name;return{text:prefix+(c?.emoji_id?label:name)+suffix,...(c?.emoji_id?{icon_custom_emoji_id:String(c.emoji_id)}:{})}};
 const admin=(e,id)=>String(e.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean).includes(String(id));
 const HOME="Arghavanplaylistt";
 
@@ -81,7 +81,7 @@ const treePrompt=async(e,q,step,cid,draft={})=>{await e.DB.prepare("INSERT INTO 
 
 const publicTree=async(e,q,parent)=>{
  const s=await setting(e);if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));
- const pref=await e.DB.prepare("SELECT sort_mode FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();const mode=parent==null?"cercis":String(pref?.sort_mode||"cercis"),cs=await children(e,parent,mode),buttons=cs.map(c=>[{...categoryButton(c,mode==="count"?" ("+Number(c.n||0)+")":""),callback_data:"home_cat:"+c.id}]);buttons.push([{text:"⚙️ نحوه نمایش",callback_data:"home_sort"}]);if(parent!=null)buttons.push([{text:"🔙 بازگشت",callback_data:"home_categories"}]);else buttons.push([{text:"🔙 منوی اصلی",callback_data:"public_start"}]);return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🗂 <b>کتابخانه Home</b>\n\nیک شاخه را انتخاب کن:",parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
+ const pref=await e.DB.prepare("SELECT sort_mode FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();const mode=parent==null?"cercis":String(pref?.sort_mode||"cercis"),cs=await children(e,parent,mode),buttons=cs.map(c=>[{...categoryButton(c,"",mode==="count"?" ("+Number(c.n||0)+")":""),callback_data:"home_cat:"+c.id}]);buttons.push([{text:"⚙️ نحوه نمایش",callback_data:"home_sort"}]);if(parent!=null)buttons.push([{text:"🔙 بازگشت",callback_data:"home_categories"}]);else buttons.push([{text:"🔙 منوی اصلی",callback_data:"public_start"}]);return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🗂 <b>کتابخانه Home</b>\n\nیک شاخه را انتخاب کن:",parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
 };
 const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
  const s=await setting(e);if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));
@@ -90,7 +90,7 @@ const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
  const rows=(await e.DB.prepare("SELECT DISTINCT p.message_id,p.url FROM home_archive_posts p JOIN home_post_paths pp ON pp.post_id=p.message_id JOIN home_post_path_nodes pn ON pn.path_id=pp.id WHERE pn.category_id=? AND p.status!='deleted' AND NOT EXISTS (SELECT 1 FROM home_post_path_nodes next WHERE next.path_id=pn.path_id AND next.level>pn.level) ORDER BY p.message_id DESC LIMIT ? OFFSET ?").bind(cid,limit+1,offset).all()).results||[];
  const hasNext=rows.length>limit;rows.splice(limit);
  const posts=[];for(const p of rows){const mark=await dossierMark(e,p.message_id);posts.push({...p,mark})}
- const buttons=sub.map(x=>[{...categoryButton(x,mode==="count"?" ("+Number(x.n||0)+")":""),callback_data:"home_cat:"+x.id}]);
+ const buttons=sub.map(x=>[{...categoryButton(x,"",mode==="count"?" ("+Number(x.n||0)+")":""),callback_data:"home_cat:"+x.id}]);
  const subNav=[];if(subPage>0)subNav.push({text:"◀️ شاخه‌های قبل",callback_data:"home_cat_sub_page:"+cid+":"+(subPage-1)+":"+page});if(subHasNext)subNav.push({text:"شاخه‌های بعد ▶️",callback_data:"home_cat_sub_page:"+cid+":"+(subPage+1)+":"+page});if(subNav.length)buttons.push(subNav);
  buttons.push(...posts.map(x=>[{text:"📌 پست #"+x.message_id+x.mark,url:x.url}]));
  const nav=[];if(page>0)nav.push({text:"◀️ پست‌های قبل",callback_data:"home_cat_page:"+cid+":"+(page-1)+":"+subPage});if(hasNext)nav.push({text:"پست‌های بعد ▶️",callback_data:"home_cat_page:"+cid+":"+(page+1)+":"+subPage});if(nav.length)buttons.push(nav);
