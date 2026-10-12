@@ -1,7 +1,7 @@
 const tg=async(e,m,b={})=>(await fetch("https://api.telegram.org/bot"+e.BOT_TOKEN+"/"+m,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)})).json();
 const out=x=>new Response(JSON.stringify(x),{status:200,headers:{"content-type":"application/json"}});
 const esc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
-const customEmoji= m=>{const es=Array.isArray(m?.entities)?m.entities:[];const x=es.find(z=>z.type==="custom_emoji"&&z.custom_emoji_id);if(!x)return{emoji:null,emoji_id:null};const chars=Array.from(String(m.text||""));const glyph=chars.slice(x.offset,x.offset+x.length).join("");return{emoji:glyph||null,emoji_id:String(x.custom_emoji_id)}};
+const customEmoji= m=>{const es=Array.isArray(m?.entities)?m.entities:[];const x=es.find(z=>z.type==="custom_emoji"&&z.custom_emoji_id);if(!x)return{emoji:null,emoji_id:null};const raw=String(m.text||"");const glyph=raw.slice(x.offset,x.offset+x.length);return{emoji:glyph||null,emoji_id:String(x.custom_emoji_id)}};
 const catHtml=(name,emojiId,emoji)=>{if(!emojiId)return esc(name);const s=String(name||"");const lead=String(emoji||"");const rest=lead&&s.startsWith(lead)?s.slice(lead.length):s;return '<tg-emoji emoji-id="'+esc(emojiId)+'">'+esc(lead||"🌿")+'</tg-emoji>'+esc(rest)};
 const admin=(e,id)=>String(e.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean).includes(String(id));
 const HOME="Arghavanplaylistt";
