@@ -99,7 +99,7 @@ const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
  const posts=[];for(const p of rows){const mark=await dossierMark(e,p.message_id);posts.push({...p,mark})}
  const buttons=sub.map(x=>[{...categoryButton(x,"",mode==="count"?" ("+Number(x.n||0)+")":""),callback_data:"home_cat:"+x.id}]);
  const subNav=[];if(subPage>0)subNav.push({text:"◀️ شاخه‌های قبل",callback_data:"home_cat_sub_page:"+cid+":"+(subPage-1)+":"+page});if(subHasNext)subNav.push({text:"شاخه‌های بعد ▶️",callback_data:"home_cat_sub_page:"+cid+":"+(subPage+1)+":"+page});if(subNav.length)buttons.push(subNav);
- buttons.push(...posts.map(x=>[{text:(String(x.title||"").trim()||("📌 پست #"+x.message_id))+x.mark,url:x.url}]));
+ buttons.push(...posts.map(x=>[{text:(String(x.title||"").trim()||("📌 پست #"+x.message_id))+x.mark,url:x.url,...(x.title_emoji_id?{icon_custom_emoji_id:String(x.title_emoji_id)}:{})}]));
  const nav=[];if(page>0)nav.push({text:"◀️ پست‌های قبل",callback_data:"home_cat_page:"+cid+":"+(page-1)+":"+subPage});if(hasNext)nav.push({text:"پست‌های بعد ▶️",callback_data:"home_cat_page:"+cid+":"+(page+1)+":"+subPage});if(nav.length)buttons.push(nav);
  buttons.push([{text:"⚙️ نحوه نمایش",callback_data:"home_sort:"+cid}],[{text:"🔙 بازگشت",callback_data:c.parent_id==null?"home_categories":"home_cat:"+c.parent_id}]);
  const linkedTitles=posts.map(x=>{const title=String(x.title||"").trim()||("📌 پست #"+x.message_id);const icon=x.title_emoji_id?'<tg-emoji emoji-id="'+esc(x.title_emoji_id)+'">'+esc(x.title_emoji||"🌕")+"</tg-emoji>":"";return '• <a href="'+esc(x.url)+'">'+icon+esc(title)+'</a>'+esc(x.mark)}).join("\n");
