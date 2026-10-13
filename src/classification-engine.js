@@ -3,7 +3,7 @@ const out=x=>new Response(JSON.stringify(x),{status:200,headers:{"content-type":
 const esc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
 const customEmoji=m=>{const raw=String(m?.text??m?.caption??"");const es=[...(Array.isArray(m?.entities)?m.entities:[]),...(Array.isArray(m?.caption_entities)?m.caption_entities:[])];const x=es.find(z=>z?.type==="custom_emoji"&&z?.custom_emoji_id);if(!x)return{emoji:null,emoji_id:null,name:raw.trim()};const start=Math.max(0,Number(x.offset)||0),end=Math.max(start,start+(Number(x.length)||0));const glyph=raw.slice(start,end);const name=(raw.slice(0,start)+raw.slice(end)).trim();return{emoji:glyph||null,emoji_id:String(x.custom_emoji_id),name}};
 const catHtml=(name,emojiId,emoji)=>{if(!emojiId)return esc(name);const s=String(name||"");const lead=String(emoji||"");const rest=lead&&s.startsWith(lead)?s.slice(lead.length):s;return '<tg-emoji emoji-id="'+esc(emojiId)+'">'+esc(lead||"🌿")+'</tg-emoji>'+esc(rest)};
-const categoryButton=(c,prefix="",suffix="")=>{const name=String(c?.name||"");const emoji=String(c?.emoji||"");const label=c?.emoji_id&&emoji&&name.startsWith(emoji)?name.slice(emoji.length).trimStart():name;return{text:prefix+(c?.emoji_id?(emoji||"🌿")+" ":"")+label+suffix}};
+const categoryButton=(c,prefix="",suffix="")=>{const name=String(c?.name||"");const emoji=String(c?.emoji||"");const label=c?.emoji_id&&emoji&&name.startsWith(emoji)?name.slice(emoji.length).trimStart():name;return{text:prefix+(c?.emoji_id?label:name)+suffix,...(c?.emoji_id?{icon_custom_emoji_id:String(c.emoji_id)}:{})}};
 const admin=(e,id)=>String(e.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean).includes(String(id));
 const HOME="Arghavanplaylistt";
 
