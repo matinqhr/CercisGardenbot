@@ -1,7 +1,20 @@
 const tg = async (e, m, b = {}) => (await fetch(`https://api.telegram.org/bot${e.BOT_TOKEN}/${m}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) })).json();
 const out = x => new Response(JSON.stringify(x ?? { ok: true }), { status: 200, headers: { "content-type": "application/json" } });
 const ensureResponse = async p => { const r = await p; return r instanceof Response ? r : out(r); };
-async function inlineSearch(e,q){const iq=q?.inline_query;if(!iq)return null;const query=String(iq.query||"").trim();if(!query)return out(await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results:[],cache_time:0,is_personal:true}));const like="%"+query.replace(/[\\%_]/g,"\\const ensureResponse = async p => { const r = await p; return r instanceof Response ? r : out(r); };")+"%";let rows=[];try{rows=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE(GROUP_CONCAT(k.keyword,' '),'') keywords FROM home_archive_posts p LEFT JOIN home_post_keywords k ON k.post_id=p.message_id WHERE p.status!='deleted' AND (p.title LIKE ? ESCAPE '\\\\' OR k.keyword LIKE ? ESCAPE '\\\\') GROUP BY p.message_id ORDER BY p.message_id DESC LIMIT 30").bind(like,like).all()).results||[]}catch(err){console.error("[INLINE_SEARCH]",err)}const results=rows.map(r=>({type:"article",id:String(r.message_id),title:String(r.title||("پست #"+r.message_id)).slice(0,256),description:String(r.keywords||"").slice(0,256),input_message_content:{message_text:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))},reply_markup:{inline_keyboard:[[{text:"باز کردن پست اصلی",url:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))}]]}}));return out(await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results,cache_time:0,is_personal:true}));}
+async function inlineSearch(e,q){
+ const iq=q?.inline_query;if(!iq)return null;
+ const query=String(iq.query||"").trim();
+ if(!query)return out(await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results:[],cache_time:0,is_personal:true}));
+ const terms=[...new Set(query.toLocaleLowerCase("fa").split(/\s+/).map(x=>x.trim()).filter(Boolean))].slice(0,6);
+ let rows=[];
+ try{
+  const all=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE(GROUP_CONCAT(k.keyword,' '),'') keywords FROM home_archive_posts p LEFT JOIN home_post_keywords k ON k.post_id=p.message_id WHERE p.status!='deleted' GROUP BY p.message_id ORDER BY p.message_id DESC LIMIT 5000").all()).results||[];
+  const norm=s=>String(s||"").toLocaleLowerCase("fa").replace(/ي/g,"ی").replace(/ك/g,"ک").replace(/[‌ـ]/g," ").replace(/\s+/g," ").trim();
+  rows=all.map(r=>({...r,_hay:norm([r.title,r.keywords].join(" "))})).filter(r=>terms.every(t=>r._hay.includes(norm(t)))).slice(0,30);
+ }catch(err){console.error("[INLINE_SEARCH]",err)}
+ const results=rows.map(r=>({type:"article",id:String(r.message_id),title:String(r.title||("پست #"+r.message_id)).slice(0,256),description:String(r.keywords||"").slice(0,256)||"پست آرشیو Home",input_message_content:{message_text:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))},reply_markup:{inline_keyboard:[[{text:"باز کردن پست اصلی",url:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))}]]}}));
+ return out(await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results,cache_time:0,is_personal:true}));
+}
 
 const admin = (e, id) => String(e.ADMIN_ID || "").split(",").map(x => x.trim()).filter(Boolean).includes(String(id));
 const link = t => { const s = String(t || "").trim().replace(/[?#].*/, "").replace(/\/$/, ""); let m = s.match(/^(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me)\/c\/(\d+)\/(\d+)$/i); if (m) return { channel: `-100${m[1]}`, post_id: Number(m[2]) }; m = s.match(/^(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me)\/(?:s\/)?([A-Za-z0-9_]+)\/(\d+)$/i); return m ? { channel: m[1], post_id: Number(m[2]) } : null; };
