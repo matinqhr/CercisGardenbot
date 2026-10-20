@@ -1,7 +1,25 @@
 const tg = async (e, m, b = {}) => (await fetch(`https://api.telegram.org/bot${e.BOT_TOKEN}/${m}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) })).json();
 const out = x => new Response(JSON.stringify(x ?? { ok: true }), { status: 200, headers: { "content-type": "application/json" } });
 const ensureResponse = async p => { const r = await p; return r instanceof Response ? r : out(r); };
-async function inlineSearch(e,q){
+async function serveInlineThumb(req,e,postId){
+ const id=Number(postId);
+ if(!Number.isSafeInteger(id)||id<1)return new Response("Not found",{status:404});
+ try{
+  await e.DB.prepare("CREATE TABLE IF NOT EXISTS home_post_overviews(post_id INTEGER PRIMARY KEY,overview TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
+  try{await e.DB.prepare("ALTER TABLE home_post_overviews ADD COLUMN photo_file_id TEXT").run()}catch{}
+  const row=await e.DB.prepare("SELECT photo_file_id FROM home_post_overviews WHERE post_id=?").bind(id).first();
+  if(!row?.photo_file_id)return new Response("Not found",{status:404});
+  const fileInfo=await tg(e,"getFile",{file_id:row.photo_file_id});
+  if(!fileInfo?.ok||!fileInfo.result?.file_path)return new Response("Not found",{status:404});
+  const image=await fetch("https://api.telegram.org/file/bot"+e.BOT_TOKEN+"/"+fileInfo.result.file_path);
+  if(!image.ok)return new Response("Image unavailable",{status:502});
+  const type=String(image.headers.get("content-type")||"image/jpeg");
+  if(!type.startsWith("image/"))return new Response("Unsupported media",{status:415});
+  return new Response(image.body,{status:200,headers:{"content-type":type,"cache-control":"public, max-age=3600","x-content-type-options":"nosniff"}});
+ }catch(err){console.error("[INLINE_THUMB]",err);return new Response("Image unavailable",{status:502});}
+}
+
+async function inlineSearch(req,e,q){
  const iq=q?.inline_query;
  if(!iq)return null;
  const query=String(iq.query||"").trim();
@@ -14,26 +32,29 @@ async function inlineSearch(e,q){
   await e.DB.prepare("CREATE TABLE IF NOT EXISTS home_post_overviews(post_id INTEGER PRIMARY KEY,overview TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
   try{await e.DB.prepare("ALTER TABLE home_post_overviews ADD COLUMN photo_file_id TEXT").run()}catch{}
   await e.DB.prepare("CREATE TABLE IF NOT EXISTS home_post_lyrics(post_id INTEGER PRIMARY KEY,lyrics TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
-  const all=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE(GROUP_CONCAT(k.keyword,' '),'') keywords,COALESCE(o.overview,'') overview,COALESCE(o.photo_file_id,'') photo_file_id,EXISTS(SELECT 1 FROM home_post_lyrics l WHERE l.post_id=p.message_id) AS has_lyrics FROM home_archive_posts p LEFT JOIN home_post_keywords k ON k.post_id=p.message_id LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE p.status!='deleted' GROUP BY p.message_id ORDER BY p.message_id DESC LIMIT 5000").all()).results||[];
+  const all=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE(GROUP_CONCAT(k.keyword,' '),'') keywords,COALESCE(o.overview,'') overview,COALESCE(o.photo_file_id,'') photo_file_id,COALESCE(o.updated_at,'') overview_updated_at,EXISTS(SELECT 1 FROM home_post_lyrics l WHERE l.post_id=p.message_id) AS has_lyrics FROM home_archive_posts p LEFT JOIN home_post_keywords k ON k.post_id=p.message_id LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE p.status!='deleted' GROUP BY p.message_id ORDER BY p.message_id DESC LIMIT 5000").all()).results||[];
   rows=all.map(r=>({...r,_hay:norm([r.title,r.keywords,r.overview].join(" "))})).filter(r=>terms.every(t=>r._hay.includes(t))).slice(0,30);
  }catch(err){console.error("[INLINE_SEARCH]",err)}
+ const origin=new URL(req.url).origin;
  const results=rows.map(r=>{
   const url=String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id));
   const title=String(r.title||("پست #"+r.message_id)).slice(0,256);
   const overview=String(r.overview||"").trim();
-  const description=String(r.keywords||"پست آرشیو Home").slice(0,256);
-  const reply_markup={inline_keyboard:[[{text:"باز کردن پست اصلی",url}]]};
+  const keywordText=String(r.keywords||"").trim();
+  const description=String(keywordText||overview||"پست آرشیو Home").slice(0,256);
+  const buttons=[{text:"باز کردن پست اصلی",url}];
+  if(Number(r.has_lyrics)===1)buttons.push({text:"🎼 دریافت متن ترانه",callback_data:"inline_lyrics:"+r.message_id});
   if(r.photo_file_id){
-   const visibleTitle=Array.from(title).slice(0,240).join("");
-   const remaining=Math.max(0,980-Array.from(visibleTitle).length-2);
-   const visibleOverview=Array.from(overview).slice(0,remaining).join("");
-   const caption='<a href="'+html(url)+'">'+html(visibleTitle)+'</a>'+(visibleOverview?'\n\n'+html(visibleOverview):"");
-   const inlineButtons=[{text:"باز کردن پست اصلی",url}];if(Number(r.has_lyrics)===1)inlineButtons.push({text:"🎼 دریافت متن ترانه",callback_data:"inline_lyrics:"+r.message_id});const keywordText=String(r.keywords||"").trim();const listTitle=(Array.from(title).slice(0,145).join("")+(keywordText?" — "+Array.from(keywordText).slice(0,100).join(""):"")).slice(0,256);return {type:"photo",id:"overview-v2:"+String(r.message_id),photo_file_id:String(r.photo_file_id),title:listTitle,description:String(keywordText||overview||"پست آرشیو Home").slice(0,256),caption,parse_mode:"HTML",show_caption_above_media:false,reply_markup:{inline_keyboard:[inlineButtons]}};
+   const revision=String(Date.parse(String(r.overview_updated_at||""))||0);
+   const thumbnailUrl=origin+"/inline-thumb/"+encodeURIComponent(String(r.message_id))+"?v="+revision;
+   const imageLink='<a href="'+html(thumbnailUrl)+'">🖼</a>';
+   const textContent='<a href="'+html(url)+'">'+html(title)+'</a>'+(overview?'\n\n'+html(overview.slice(0,3000)):'')+'\n\n'+imageLink;
+   return {type:"article",id:"photo-article-v4:"+String(r.message_id),title,description,thumbnail_url:thumbnailUrl,input_message_content:{message_text:textContent,parse_mode:"HTML",link_preview_options:{url:thumbnailUrl,prefer_large_media:true,show_above_text:true}},reply_markup:{inline_keyboard:[buttons]}};
   }
   const input_message_content=overview
-   ?{message_text:'<a href="'+html(url)+'">'+html(title)+'</a>\n\n'+html(overview.slice(0,3800)),parse_mode:"HTML",disable_web_page_preview:true}
+   ?{message_text:'<a href="'+html(url)+'">'+html(title)+'</a>\n\n'+html(overview.slice(0,3800)),parse_mode:"HTML",link_preview_options:{is_disabled:true}}
    :{message_text:url};
-  const articleButtons=[{text:"باز کردن پست اصلی",url}];if(Number(r.has_lyrics)===1)articleButtons.push({text:"🎼 دریافت متن ترانه",callback_data:"inline_lyrics:"+r.message_id});return {type:"article",id:String(r.message_id),title,description,input_message_content,reply_markup:{inline_keyboard:[articleButtons]}};
+  return {type:"article",id:String(r.message_id),title,description,input_message_content,reply_markup:{inline_keyboard:[buttons]}};
  });
  return out(await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results,cache_time:0,is_personal:true}));
 }
@@ -89,7 +110,7 @@ async function routeCallback(req,e,ctx,u){const q=u?.callback_query;if(!q)return
  if(d.startsWith("flash:")||d.startsWith("flash_index:")||d==="flash_noop")return ensureResponse(import("./flashcard-gate.js").then(x=>x.default.fetch(req,e,ctx)));
  if(admin(e,id))return ensureResponse(import("./fix-router.js").then(x=>x.default.fetch(req,e,ctx)));
  if(d==="public_list_noop"){await tg(e,"answerCallbackQuery",{callback_query_id:q.id});return out({ok:true});} if(d==="request_info")return ensureResponse(import("./home-gate.js").then(x=>x.default.fetch(req,e,ctx)));await tg(e,"answerCallbackQuery",{callback_query_id:q.id});return out({ok:true}); }
-async function route(req,e,ctx,u){if(u?.inline_query)return inlineSearch(e,u);const cb=await routeCallback(req,e,ctx,u);if(cb)return cb;const m=u?.message;if(!m)return out({ok:true});const command=String(m.text||"").trim().split(/\s+/)[0].toLowerCase();if(command==="/enable_inline"||command==="/enable_inline@cercisgardenbot"){if(!admin(e,m.from?.id)){await tg(e,"sendMessage",{chat_id:m.chat?.id,text:"این دستور فقط برای ادمین ربات فعال است."});return out({ok:true});}const payload={url:req.url,allowed_updates:["message","callback_query","inline_query"]};if(e.WEBHOOK_SECRET)payload.secret_token=String(e.WEBHOOK_SECRET);const configured=await tg(e,"setWebhook",payload);if(!configured?.ok){console.error("[ENABLE_INLINE_WEBHOOK]",JSON.stringify(configured));await tg(e,"sendMessage",{chat_id:m.chat?.id,text:"تنظیم وب‌هوک انجام نشد. لطفاً لاگ Worker را بررسی کن."});return out({ok:true});}await tg(e,"sendMessage",{chat_id:m.chat?.id,text:"✅ دریافت inline_query فعال شد. حالا در تلگرام @CercisGardenbot را همراه یک عبارت جست‌وجو کن."});return out({ok:true});}if(String(m.text||"").trim()==="/start")return ensureResponse(import("./start-handler.js").then(x=>x.default.fetch(req,e,ctx)));if(String(m.text||"").trim()==="/admin"){if(!admin(e,m.from?.id))return out(await tg(e,"sendMessage",{chat_id:m?.chat?.id,text:"⚠️ <b>دسترسی ندارید.</b>",parse_mode:"HTML"}));return ensureResponse(import("./admin-panel.js").then(x=>x.default.fetch(req,e,ctx)));}
+async function route(req,e,ctx,u){if(u?.inline_query)return inlineSearch(req,e,u);const cb=await routeCallback(req,e,ctx,u);if(cb)return cb;const m=u?.message;if(!m)return out({ok:true});const command=String(m.text||"").trim().split(/\s+/)[0].toLowerCase();if(command==="/enable_inline"||command==="/enable_inline@cercisgardenbot"){if(!admin(e,m.from?.id)){await tg(e,"sendMessage",{chat_id:m.chat?.id,text:"این دستور فقط برای ادمین ربات فعال است."});return out({ok:true});}const payload={url:req.url,allowed_updates:["message","callback_query","inline_query"]};if(e.WEBHOOK_SECRET)payload.secret_token=String(e.WEBHOOK_SECRET);const configured=await tg(e,"setWebhook",payload);if(!configured?.ok){console.error("[ENABLE_INLINE_WEBHOOK]",JSON.stringify(configured));await tg(e,"sendMessage",{chat_id:m.chat?.id,text:"تنظیم وب‌هوک انجام نشد. لطفاً لاگ Worker را بررسی کن."});return out({ok:true});}await tg(e,"sendMessage",{chat_id:m.chat?.id,text:"✅ دریافت inline_query فعال شد. حالا در تلگرام @CercisGardenbot را همراه یک عبارت جست‌وجو کن."});return out({ok:true});}if(String(m.text||"").trim()==="/start")return ensureResponse(import("./start-handler.js").then(x=>x.default.fetch(req,e,ctx)));if(String(m.text||"").trim()==="/admin"){if(!admin(e,m.from?.id))return out(await tg(e,"sendMessage",{chat_id:m?.chat?.id,text:"⚠️ <b>دسترسی ندارید.</b>",parse_mode:"HTML"}));return ensureResponse(import("./admin-panel.js").then(x=>x.default.fetch(req,e,ctx)));}
  const rawText=m.text||m.caption||"";let quizStep="";if(admin(e,m.from?.id)){try{const qs=await e.DB.prepare("SELECT step FROM quiz_admin_sessions WHERE user_id=?").bind(m.from?.id).first();quizStep=String(qs?.step||"")}catch{}}if(quizStep)return ensureResponse(import("./quiz-admin.js").then(x=>x.default.fetch(req,e,ctx)));const candidates=multiLinks(rawText);if(admin(e,m.from?.id)){try{const cs=await e.DB.prepare("SELECT step FROM sessions WHERE user_id=?").bind(m.from.id).first();if(String(cs?.step||"").startsWith("CLASSIFY_"))return ensureResponse(import("./classification-engine.js").then(x=>x.default.fetch(req,e,ctx)));}catch(err){console.error("[CLASSIFICATION_SESSION_ROUTE]",err)}}const step=await flashStep(e,m.from?.id);
  if(admin(e,m.from?.id)&&step==="ADD_LINK")return handleBookLinkMessage(e,m,await e.DB.prepare("SELECT * FROM sessions WHERE user_id=?").bind(m.from.id).first(),"add");
  if(admin(e,m.from?.id)&&step==="ADD_LINK_MORE")return handleBookMoreLinkMessage(e,m,await e.DB.prepare("SELECT * FROM sessions WHERE user_id=?").bind(m.from.id).first(),"add");
@@ -100,4 +121,4 @@ async function route(req,e,ctx,u){if(u?.inline_query)return inlineSearch(e,u);co
  if(admin(e,m.from?.id)&&(step==="FLASH_ADD_LINK"||step==="FLASH_EDIT_LINK")&&candidates.length>1){const first=candidates[0].parsed,key=x=>String(x.channel).replace(/^@/,"").toLowerCase();if(candidates.some(x=>key(x.parsed)!==key(first)))return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ همه لینک‌ها باید مربوط به یک کانال باشند."}));const unique=[],seen=new Set();for(const x of candidates){const k=`${key(x.parsed)}:${x.parsed.post_id}`;if(!seen.has(k)){seen.add(k);unique.push(x.parsed);}}if(unique.length<2)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ حداقل دو لینک متفاوت برای این حالت لازم است."}));const patched=new Request(req.url,{method:"POST",headers:req.headers,body:JSON.stringify({...u,message:{...m,text:canonicalLink(first),entities:[]}})}),result=await ensureResponse(import("./flashcard-gate.js").then(x=>x.default.fetch(patched,e,ctx)));try{const s=await e.DB.prepare("SELECT * FROM sessions WHERE user_id=?").bind(m.from?.id).first();if(s)await e.DB.prepare("UPDATE sessions SET url=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(unique.map(canonicalLink).join("\n"),m.from?.id).run();}catch{}return result;}
  if(admin(e,m.from?.id)&&(step==="ADD_FORM"||step==="EDIT_FORM"||step==="PICKLE_FORM"))return ensureResponse(import("./admin-book-gate-v2.js").then(x=>x.default.fetch(req,e,ctx)));
  const direct=link(rawText),fs=forwardedSource(m);let source=direct||fs;if(admin(e,m.from?.id)&&await isFlashSession(e,m.from?.id,source)){const currentStep=await flashStep(e,m.from?.id);if(currentStep==="FLASH_EDIT_LINK")return ensureResponse(import("./flashcard-edit-gate.js").then(x=>x.handleMessage(e,m)));return ensureResponse(import("./flashcard-gate.js").then(x=>x.default.fetch(req,e,ctx)));}if(!admin(e,m.from?.id)&&source&&await isFlashSource(e,source))return ensureResponse(import("./flashcard-gate.js").then(x=>x.default.fetch(req,e,ctx)));if(source){const linked=await linkedTrack(e,source);if(linked)source={channel:linked.channel,post_id:linked.post_id};}const publicLink=source?`https://t.me/${String(source.channel).replace(/^@/,"")}/${source.post_id}`:null;const patched=publicLink?new Request(req.url,{method:"POST",headers:req.headers,body:JSON.stringify({...u,message:{...m,text:publicLink,entities:[]}})}):req;if(publicLink)return ensureResponse(import("./public-delivery.js").then(x=>x.default.fetch(patched,e,ctx)));if(!admin(e,m.from?.id))return out({ok:true});return ensureResponse(import("./fix-router.js").then(x=>x.default.fetch(patched,e,ctx)));}
-export default {async fetch(req,e,ctx){if(req.method!=="POST")return out({ok:true});const path=new URL(req.url).pathname;if(path.startsWith("/api/quiz/"))return ensureResponse(import("./quiz-api.js").then(x=>x.default.fetch(req,e,ctx)));let u;try{u=await req.clone().json();}catch{return out({ok:true});}try{return await ensureResponse(route(req,e,ctx,u));}catch(err){console.error("[CERCIS_ROUTER]",err);const q=u?.callback_query;if(q?.id)try{await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"⚠️ خطای موقت. لطفاً دوباره تلاش کنید."});}catch{}return out({ok:true});}}};
+export default {async fetch(req,e,ctx){const path=new URL(req.url).pathname;const thumb=path.match(/^\/inline-thumb\/(\d+)$/);if(req.method==="GET"&&thumb)return serveInlineThumb(req,e,thumb[1]);if(req.method!=="POST")return out({ok:true});if(path.startsWith("/api/quiz/"))return ensureResponse(import("./quiz-api.js").then(x=>x.default.fetch(req,e,ctx)));let u;try{u=await req.clone().json();}catch{return out({ok:true});}try{return await ensureResponse(route(req,e,ctx,u));}catch(err){console.error("[CERCIS_ROUTER]",err);const q=u?.callback_query;if(q?.id)try{await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"⚠️ خطای موقت. لطفاً دوباره تلاش کنید."});}catch{}return out({ok:true});}}};
