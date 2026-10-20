@@ -41,15 +41,15 @@ async function inlineSearch(req,e,q){
   const title=String(r.title||("پست #"+r.message_id)).slice(0,256);
   const overview=String(r.overview||"").trim();
   const keywordText=String(r.keywords||"").trim();
-  const description=String(keywordText||overview||"پست آرشیو Home").slice(0,256);
+  const description=String(keywordText||"پست آرشیو Home").slice(0,256);
   const buttons=[{text:"باز کردن پست اصلی",url}];
   if(Number(r.has_lyrics)===1)buttons.push({text:"🎼 دریافت متن ترانه",callback_data:"inline_lyrics:"+r.message_id});
   if(r.photo_file_id){
    const revision=String(Date.parse(String(r.overview_updated_at||""))||0);
-   const thumbnailUrl=origin+"/inline-thumb/"+encodeURIComponent(String(r.message_id))+"?v="+revision;
-   const imageLink='<a href="'+html(thumbnailUrl)+'">🖼</a>';
-   const textContent='<a href="'+html(url)+'">'+html(title)+'</a>'+(overview?'\n\n'+html(overview.slice(0,3000)):'')+'\n\n'+imageLink;
-   return {type:"article",id:"photo-article-v4:"+String(r.message_id),title,description,thumbnail_url:thumbnailUrl,input_message_content:{message_text:textContent,parse_mode:"HTML",link_preview_options:{url:thumbnailUrl,prefer_large_media:true,show_above_text:true}},reply_markup:{inline_keyboard:[buttons]}};
+   const imageUrl=origin+"/inline-thumb/"+encodeURIComponent(String(r.message_id))+"?v="+revision;
+   const maxOverview=Math.max(0,990-Array.from(title).length-2);
+   const caption='<a href="'+html(url)+'">'+html(title)+'</a>'+(overview?'\n\n'+html(Array.from(overview).slice(0,maxOverview).join("")):'');
+   return {type:"photo",id:"photo-v5:"+String(r.message_id),photo_url:imageUrl,thumbnail_url:imageUrl,title,description,caption,parse_mode:"HTML",show_caption_above_media:false,reply_markup:{inline_keyboard:[buttons]}};
   }
   const input_message_content=overview
    ?{message_text:'<a href="'+html(url)+'">'+html(title)+'</a>\n\n'+html(overview.slice(0,3800)),parse_mode:"HTML",link_preview_options:{is_disabled:true}}
