@@ -33,7 +33,7 @@ async function inlineSearch(e,q){
   const input_message_content=overview
    ?{message_text:'<a href="'+html(url)+'">'+html(title)+'</a>\n\n'+html(overview.slice(0,3800)),parse_mode:"HTML",disable_web_page_preview:true}
    :{message_text:url};
-  const articleButtons=[[{text:"باز کردن پست اصلی",url}]];const lyricExists=await e.DB.prepare("SELECT 1 AS yes FROM home_post_lyrics WHERE post_id=?").bind(Number(r.message_id)).first();if(lyricExists)articleButtons.push([{text:"🎼 دریافت متن ترانه",callback_data:"inline_lyrics:"+r.message_id}]);return {type:"article",id:String(r.message_id),title,description,input_message_content,reply_markup:{inline_keyboard:articleButtons}};
+  const articleButtons=[{text:"باز کردن پست اصلی",url}];if(Number(r.has_lyrics)===1)articleButtons.push({text:"🎼 دریافت متن ترانه",callback_data:"inline_lyrics:"+r.message_id});return {type:"article",id:String(r.message_id),title,description,input_message_content,reply_markup:{inline_keyboard:[articleButtons]}};
  });
  return out(await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results,cache_time:0,is_personal:true}));
 }
