@@ -12,17 +12,27 @@ async function inlineSearch(e,q){
  let rows=[];
  try{
   await e.DB.prepare("CREATE TABLE IF NOT EXISTS home_post_overviews(post_id INTEGER PRIMARY KEY,overview TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
-  const all=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE(GROUP_CONCAT(k.keyword,' '),'') keywords,COALESCE(o.overview,'') overview FROM home_archive_posts p LEFT JOIN home_post_keywords k ON k.post_id=p.message_id LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE p.status!='deleted' GROUP BY p.message_id ORDER BY p.message_id DESC LIMIT 5000").all()).results||[];
+  try{await e.DB.prepare("ALTER TABLE home_post_overviews ADD COLUMN photo_file_id TEXT").run()}catch{}
+  const all=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE(GROUP_CONCAT(k.keyword,' '),'') keywords,COALESCE(o.overview,'') overview,COALESCE(o.photo_file_id,'') photo_file_id FROM home_archive_posts p LEFT JOIN home_post_keywords k ON k.post_id=p.message_id LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE p.status!='deleted' GROUP BY p.message_id ORDER BY p.message_id DESC LIMIT 5000").all()).results||[];
   rows=all.map(r=>({...r,_hay:norm([r.title,r.keywords,r.overview].join(" "))})).filter(r=>terms.every(t=>r._hay.includes(t))).slice(0,30);
  }catch(err){console.error("[INLINE_SEARCH]",err)}
  const results=rows.map(r=>{
   const url=String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id));
   const title=String(r.title||("پست #"+r.message_id)).slice(0,256);
   const overview=String(r.overview||"").trim();
+  const description=String(overview||r.keywords||"پست آرشیو Home").slice(0,256);
+  const reply_markup={inline_keyboard:[[{text:"باز کردن پست اصلی",url}]]};
+  if(r.photo_file_id){
+   const visibleTitle=Array.from(title).slice(0,240).join("");
+   const remaining=Math.max(0,980-Array.from(visibleTitle).length-2);
+   const visibleOverview=Array.from(overview).slice(0,remaining).join("");
+   const caption='<a href="'+html(url)+'">'+html(visibleTitle)+'</a>'+(visibleOverview?'\n\n'+html(visibleOverview):"");
+   return {type:"photo",id:String(r.message_id),photo_file_id:String(r.photo_file_id),title:visibleTitle,description,caption,parse_mode:"HTML",show_caption_above_media:true,reply_markup};
+  }
   const input_message_content=overview
    ?{message_text:'<a href="'+html(url)+'">'+html(title)+'</a>\n\n'+html(overview.slice(0,3800)),parse_mode:"HTML",disable_web_page_preview:true}
    :{message_text:url};
-  return {type:"article",id:String(r.message_id),title,description:String(overview||r.keywords||"پست آرشیو Home").slice(0,256),input_message_content,reply_markup:{inline_keyboard:[[{text:"باز کردن پست اصلی",url}]]}};
+  return {type:"article",id:String(r.message_id),title,description,input_message_content,reply_markup};
  });
  return out(await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results,cache_time:0,is_personal:true}));
 }
