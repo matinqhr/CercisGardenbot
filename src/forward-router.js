@@ -35,20 +35,18 @@ async function inlineSearch(req,e,q){
   const all=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE(GROUP_CONCAT(k.keyword,' '),'') keywords,COALESCE(o.overview,'') overview,COALESCE(o.photo_file_id,'') photo_file_id,COALESCE(o.updated_at,'') overview_updated_at,EXISTS(SELECT 1 FROM home_post_lyrics l WHERE l.post_id=p.message_id) AS has_lyrics FROM home_archive_posts p LEFT JOIN home_post_keywords k ON k.post_id=p.message_id LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE p.status!='deleted' GROUP BY p.message_id ORDER BY p.message_id DESC LIMIT 5000").all()).results||[];
   rows=all.map(r=>({...r,_hay:norm([r.title,r.keywords,r.overview].join(" "))})).filter(r=>terms.every(t=>r._hay.includes(t))).slice(0,30);
  }catch(err){console.error("[INLINE_SEARCH]",err)}
- const origin=new URL(req.url).origin;
  const results=rows.map(r=>{
   const url=String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id));
   const title=String(r.title||("پست #"+r.message_id)).slice(0,256);
   const overview=String(r.overview||"").trim();
   const keywordText=String(r.keywords||"").trim();
-  const description=String(keywordText||"پست آرشیو Home").slice(0,256);
+  const description=String(keywordText||overview||"پست آرشیو Home").slice(0,256);
   const buttons=[{text:"باز کردن پست اصلی",url}];
   if(Number(r.has_lyrics)===1)buttons.push({text:"🎼 دریافت متن ترانه",callback_data:"inline_lyrics:"+r.message_id});
   if(r.photo_file_id){
-   const revision=String(Date.parse(String(r.updated_at||""))||0);
-   const imageUrl=origin+"/inline-thumb/"+encodeURIComponent(String(r.message_id))+"?v="+revision;
-   const messageText='<a href="'+html(url)+'">'+html(title)+'</a>'+(overview?'\n\n'+html(overview.slice(0,3000)):'');
-   return {type:"article",id:"article-photo-v7:"+String(r.message_id),title,description,thumbnail_url:imageUrl,thumbnail_width:320,thumbnail_height:320,input_message_content:{message_text:messageText,parse_mode:"HTML",link_preview_options:{url:imageUrl,prefer_large_media:true,show_above_text:true}},reply_markup:{inline_keyboard:[buttons]}};
+   const maxOverview=Math.max(0,1000-Array.from(title).length-2);
+   const caption='<a href="'+html(url)+'">'+html(title)+'</a>'+(overview?'\n\n'+html(Array.from(overview).slice(0,maxOverview).join("")):'');
+   return {type:"photo",id:"cached-photo-v8:"+String(r.message_id),photo_file_id:String(r.photo_file_id),title,description,caption,parse_mode:"HTML",show_caption_above_media:false,reply_markup:{inline_keyboard:[buttons]}};
   }
   const input_message_content=overview
    ?{message_text:'<a href="'+html(url)+'">'+html(title)+'</a>\n\n'+html(overview.slice(0,3800)),parse_mode:"HTML",link_preview_options:{is_disabled:true}}
