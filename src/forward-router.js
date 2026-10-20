@@ -7,13 +7,23 @@ async function inlineSearch(e,q){
  const query=String(iq.query||"").trim();
  if(!query)return out(await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results:[],cache_time:0,is_personal:true}));
  const norm=s=>String(s||"").toLocaleLowerCase("fa").replace(/ي/g,"ی").replace(/ك/g,"ک").replace(/[‌ـ]/g," ").replace(/\s+/g," ").trim();
+ const html=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
  const terms=[...new Set(norm(query).split(" ").filter(Boolean))].slice(0,6);
  let rows=[];
  try{
-  const all=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE(GROUP_CONCAT(k.keyword,' '),'') keywords FROM home_archive_posts p LEFT JOIN home_post_keywords k ON k.post_id=p.message_id WHERE p.status!='deleted' GROUP BY p.message_id ORDER BY p.message_id DESC LIMIT 5000").all()).results||[];
-  rows=all.map(r=>({...r,_hay:norm([r.title,r.keywords].join(" "))})).filter(r=>terms.every(t=>r._hay.includes(t))).slice(0,30);
+  await e.DB.prepare("CREATE TABLE IF NOT EXISTS home_post_overviews(post_id INTEGER PRIMARY KEY,overview TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
+  const all=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE(GROUP_CONCAT(k.keyword,' '),'') keywords,COALESCE(o.overview,'') overview FROM home_archive_posts p LEFT JOIN home_post_keywords k ON k.post_id=p.message_id LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE p.status!='deleted' GROUP BY p.message_id ORDER BY p.message_id DESC LIMIT 5000").all()).results||[];
+  rows=all.map(r=>({...r,_hay:norm([r.title,r.keywords,r.overview].join(" "))})).filter(r=>terms.every(t=>r._hay.includes(t))).slice(0,30);
  }catch(err){console.error("[INLINE_SEARCH]",err)}
- const results=rows.map(r=>({type:"article",id:String(r.message_id),title:String(r.title||("پست #"+r.message_id)).slice(0,256),description:String(r.keywords||"").slice(0,256)||"پست آرشیو Home",input_message_content:{message_text:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))},reply_markup:{inline_keyboard:[[{text:"باز کردن پست اصلی",url:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))}]]}}));
+ const results=rows.map(r=>{
+  const url=String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id));
+  const title=String(r.title||("پست #"+r.message_id)).slice(0,256);
+  const overview=String(r.overview||"").trim();
+  const input_message_content=overview
+   ?{message_text:'<a href="'+html(url)+'">'+html(title)+'</a>\n\n'+html(overview.slice(0,3800)),parse_mode:"HTML",disable_web_page_preview:true}
+   :{message_text:url};
+  return {type:"article",id:String(r.message_id),title,description:String(overview||r.keywords||"پست آرشیو Home").slice(0,256),input_message_content,reply_markup:{inline_keyboard:[[{text:"باز کردن پست اصلی",url}]]}};
+ });
  return out(await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results,cache_time:0,is_personal:true}));
 }
 
