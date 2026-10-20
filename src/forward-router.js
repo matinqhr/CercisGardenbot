@@ -44,9 +44,9 @@ async function inlineSearch(req,e,q){
   const buttons=[{text:"باز کردن پست اصلی",url}];
   if(Number(r.has_lyrics)===1)buttons.push({text:"🎼 دریافت متن ترانه",callback_data:"inline_lyrics:"+r.message_id});
   if(r.photo_file_id){
-   const maxOverview=Math.max(0,1000-Array.from(title).length-2);
+   const revision=String(Date.parse(String(r.overview_updated_at||""))||0);const imageUrl=origin+"/inline-thumb/"+encodeURIComponent(String(r.message_id))+"?v="+revision;const maxOverview=Math.max(0,1000-Array.from(title).length-2);
    const caption='<a href="'+html(url)+'">'+html(title)+'</a>'+(overview?'\n\n'+html(Array.from(overview).slice(0,maxOverview).join("")):'');
-   return {type:"photo",id:"cached-photo-v8:"+String(r.message_id),photo_file_id:String(r.photo_file_id),title,description,caption,parse_mode:"HTML",show_caption_above_media:false,reply_markup:{inline_keyboard:[buttons]}};
+   return {type:"photo",id:"photo-url-v1:"+String(r.message_id),photo_url:imageUrl,thumbnail_url:imageUrl,thumbnail_width:320,thumbnail_height:320,title,description,caption,parse_mode:"HTML",show_caption_above_media:false,reply_markup:{inline_keyboard:[buttons]}};
   }
   const input_message_content=overview
    ?{message_text:'<a href="'+html(url)+'">'+html(title)+'</a>\n\n'+html(overview.slice(0,3800)),parse_mode:"HTML",link_preview_options:{is_disabled:true}}
