@@ -44,6 +44,7 @@ const children=async(e,parent,mode="cercis")=>{
 const postPaths=async(e,postId)=>((await e.DB.prepare("SELECT p.id,p.sort_order,p.created_at,(SELECT GROUP_CONCAT(c.name,' → ') FROM home_post_path_nodes n JOIN classification_categories c ON c.id=n.category_id WHERE n.path_id=p.id ORDER BY n.level) path FROM home_post_paths p WHERE p.post_id=? ORDER BY p.sort_order,p.id").bind(postId).all()).results||[]);
 const pathNodes=async(e,pathId)=>((await e.DB.prepare("SELECT n.level,n.category_id,c.name,c.parent_id FROM home_post_path_nodes n JOIN classification_categories c ON c.id=n.category_id WHERE n.path_id=? ORDER BY n.level").bind(pathId).all()).results||[]);
 const createPath=async(e,postId)=>{const mx=await e.DB.prepare("SELECT COALESCE(MAX(sort_order),0) n FROM home_post_paths WHERE post_id=?").bind(postId).first();const r=await e.DB.prepare("INSERT INTO home_post_paths(post_id,sort_order) VALUES(?,?) RETURNING id").bind(postId,Number(mx?.n||0)+1).first();return Number(r?.id||0);};
+const previousPathSource=async(e,postId)=>e.DB.prepare("SELECT p.post_id,COUNT(DISTINCT p.id) path_count FROM home_post_paths p JOIN home_post_path_nodes n ON n.path_id=p.id WHERE p.post_id<? GROUP BY p.post_id ORDER BY p.post_id DESC LIMIT 1").bind(postId).first();
 const dossierMark=async(e,postId)=>{try{const direct=await e.DB.prepare("SELECT 1 FROM tracks WHERE post_id=? LIMIT 1").bind(postId).first();if(direct)return" *";const linked=await e.DB.prepare("SELECT 1 FROM track_links l JOIN tracks t ON t.id=l.track_id WHERE l.post_id=? LIMIT 1").bind(postId).first();return linked?" *":""}catch{return""}};
 
 const render=async(e,q)=>{
@@ -53,23 +54,26 @@ const render=async(e,q)=>{
  const keywords=(await e.DB.prepare("SELECT keyword FROM home_post_keywords WHERE post_id=? ORDER BY keyword COLLATE NOCASE").bind(id).all()).results||[];
  const titleText=String(r?.title||"").trim();
  const overview=await e.DB.prepare("SELECT overview,photo_file_id FROM home_post_overviews WHERE post_id=?").bind(id).first();
+ const lyrics=await e.DB.prepare("SELECT 1 AS present FROM home_post_lyrics WHERE post_id=? LIMIT 1").bind(id).first();
  const keywordChars=keywords.reduce((sum,x)=>sum+Array.from(String(x.keyword||"")).length,0);
  const keywordText=keywords.length?keywords.length+" کلیدواژه ثبت شده؛ مجموع "+keywordChars+" نویسه":"هنوز کلیدواژه‌ای ثبت نشده است";
- const text="⚙️ <b>موتور پیشرفته طبقه‌بندی</b>\n\n📌 پست #"+id+mark+"\n🔗 <a href=\"https://t.me/"+HOME+"/"+id+"\">مشاهده پست</a>\n🏷 عنوان: "+esc(titleText||"ثبت نشده") +"\n\nوضعیت: "+status+"\n\n<b>🗂 مسیرهای کتابخانه:</b>\n"+esc(pathText)+"\n\n<b>🔑 کلیدواژه‌ها:</b>\n"+esc(keywordText)+"\n\n<b>📝 اطلاعات اجمالی:</b>\n"+(overview?.overview||overview?.photo_file_id?"ثبت شده"+(overview?.photo_file_id?" همراه عکس":"")+(overview?.overview?" ("+String(overview.overview.length)+" نویسه)":""):"ثبت نشده");
+ const text="⚙️ <b>موتور پیشرفته طبقه‌بندی</b>\n\n📌 پست #"+id+mark+"\n🔗 <a href=\"https://t.me/"+HOME+"/"+id+"\">مشاهده پست</a>\n🏷 عنوان: "+esc(titleText||"ثبت نشده") +"\n\nوضعیت: "+status+"\n\n<b>🗂 مسیرهای کتابخانه:</b>\n"+esc(pathText)+"\n\n<b>🔑 کلیدواژه‌ها:</b>\n"+esc(keywordText)+"\n\n<b>📝 اطلاعات اجمالی:</b>\n"+(overview?.overview||overview?.photo_file_id?"ثبت شده"+(overview?.photo_file_id?" همراه عکس":"")+(overview?.overview?" ("+String(overview.overview.length)+" نویسه)":""):"ثبت نشده")+"\n\n<b>🎼 متن ترانه:</b>\n"+(lyrics?"ثبت شده":"ثبت نشده");
  const kb=[[{text:"👀 مشاهده پست",url:"https://t.me/"+HOME+"/"+id}],[{text:"🗂 مسیرهای پست",callback_data:"ce_paths:"+id},{text:"🌳 مدیریت ساختار",callback_data:"ce_tree"}],[{text:"🏷 عنوان پست",callback_data:"ce_title:"+id},{text:"🔑 کلیدواژه",callback_data:"ce_kw:"+id}],[{text:"📝 ثبت/ویرایش اطلاعات اجمالی",callback_data:"ce_overview:"+id}], [{text:"🎼 ثبت/ویرایش متن ترانه",callback_data:"ce_lyrics:"+id}],[{text:Number(r?.future_dossier)===1?"💔 خارج‌کردن از صف پرونده‌های آینده":"❤️ افزودن به صف پرونده‌های آینده",callback_data:"ce_future:"+id}],...(r?.status==="deleted"?[[{text:"↩️ بازگرداندن پست حذف‌شده",callback_data:"ce_restore:"+id}]]:[[{text:"❌ پست حذف شده",callback_data:"ce_deleted:"+id}]]),[{text:"◀️ قبلی",callback_data:"ce_prev:"+id},{text:"بعدی ▶️",callback_data:"ce_next:"+id}],[{text:"🔢 رفتن به شماره پست",callback_data:"ce_goto"}],[{text:s.enabled?"⏸ خاموش کردن موتور":"▶️ روشن کردن موتور",callback_data:"ce_toggle"}],[{text:s.library_enabled?"🔴 مخفی‌کردن کتابخانه از Start":"🟢 نمایش کتابخانه در Start",callback_data:"ce_library_toggle"}],[{text:"🔙 پنل مدیریت",callback_data:"panel"}]];
  return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text,parse_mode:"HTML",reply_markup:{inline_keyboard:kb}}));
 };
 
-const pathList=async(e,q,postId)=>{
- const paths=await postPaths(e,postId);
- const buttons=paths.map((x,i)=>[{text:""+(i+1)+"️⃣ "+(x.path||"مسیر خالی"),callback_data:"ce_path_edit:"+postId+":"+x.id+":1"}]);
- buttons.push([{text:"➕ افزودن مسیر",callback_data:"ce_path_add:"+postId}]);
- if(paths.length)buttons.push([{text:"✏️ مدیریت مسیرها",callback_data:"ce_path_manage:"+postId}]);
- buttons.push([{text:"🔙 موتور طبقه‌بندی",callback_data:"classification_engine"}]);
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🗂 <b>مسیرهای پست #"+postId+"</b>\n\n"+(paths.length?paths.map((x,i)=>String(i+1)+". "+esc(x.path||"—")).join("\n"):"هنوز مسیری ثبت نشده است"),parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
+const pathList=async(e,q,postId,notice="")=>{
+  const paths=await postPaths(e,postId);
+  const previous=await previousPathSource(e,postId);
+  const buttons=paths.map((x,i)=>[{text:""+(i+1)+"️⃣ "+(x.path||"مسیر خالی"),callback_data:"ce_path_edit:"+postId+":"+x.id+":1"}]);
+  if(previous)buttons.push([{text:"📋 کپی مسیرهای پست #"+previous.post_id,callback_data:"ce_path_copy_previous:"+postId}]);
+  buttons.push([{text:"➕ افزودن مسیر",callback_data:"ce_path_add:"+postId}]);
+  if(paths.length)buttons.push([{text:"✏️ مدیریت مسیرها",callback_data:"ce_path_manage:"+postId}]);
+  buttons.push([{text:"🔙 موتور طبقه‌بندی",callback_data:"classification_engine"}]);
+  return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🗂 <b>مسیرهای پست #"+postId+"</b>\n\n"+(notice?esc(notice)+"\n\n":"")+(paths.length?paths.map((x,i)=>String(i+1)+". "+esc(x.path||"—")).join("\n"):"هنوز مسیری ثبت نشده است"),parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
 };
-
-const pathMenu=async(e,q,postId,pathId,level)=>{
+ 
+ const pathMenu=async(e,q,postId,pathId,level)=>{
  const rows=await pathNodes(e,pathId),current=rows.find(x=>Number(x.level)===level),parent=level===1?null:Number(rows.find(x=>Number(x.level)===level-1)?.category_id||0)||null,cs=await children(e,parent);
  const buttons=cs.map(x=>[{...categoryButton(x,(Number(current?.category_id)===Number(x.id)?"✅ ":"")),callback_data:"ce_pick:"+postId+":"+pathId+":"+level+":"+x.id}]);
  if(level>1)buttons.push([{text:"⬅️ سطح قبل",callback_data:"ce_path_edit:"+postId+":"+pathId+":"+(level-1)}]);
@@ -150,7 +154,26 @@ export default{async fetch(req,e){
  if(d==="ce_toggle"){const s=await setting(e);await e.DB.prepare("UPDATE classification_settings SET enabled=? WHERE id=1").bind(s.enabled?0:1).run();return render(e,q);}
  if(d==="ce_library_toggle"){const s=await setting(e);await e.DB.prepare("UPDATE classification_settings SET library_enabled=? WHERE id=1").bind(s.library_enabled?0:1).run();return render(e,q);}
  if(d.startsWith("ce_paths:"))return pathList(e,q,Number(d.split(":")[1]));
- if(d.startsWith("ce_path_add:")){const pid=Number(d.split(":")[1]),pathId=await createPath(e,pid);return pathMenu(e,q,pid,pathId,1);}
+ if(d.startsWith("ce_path_copy_previous:")){
+   const pid=Number(d.split(":")[1]),source=await previousPathSource(e,pid);
+   if(!source)return pathList(e,q,pid,"از پست‌های قبلی مسیر ثبت‌شده‌ای پیدا نشد.");
+   const sourcePaths=(await e.DB.prepare("SELECT id FROM home_post_paths WHERE post_id=? ORDER BY sort_order,id").bind(Number(source.post_id)).all()).results||[];
+   const targetPaths=(await e.DB.prepare("SELECT id FROM home_post_paths WHERE post_id=? ORDER BY sort_order,id").bind(pid).all()).results||[];
+   const signatures=new Set();
+   for(const p of targetPaths){const ns=await pathNodes(e,p.id);if(ns.length)signatures.add(ns.map(n=>Number(n.category_id)).join(","));}
+   let added=0;
+   for(const p of sourcePaths){
+    const ns=await pathNodes(e,p.id);if(!ns.length)continue;
+    const signature=ns.map(n=>Number(n.category_id)).join(",");
+    if(signatures.has(signature))continue;
+    const newId=await createPath(e,pid);
+    for(const n of ns)await e.DB.prepare("INSERT INTO home_post_path_nodes(path_id,level,category_id) VALUES(?,?,?)").bind(newId,Number(n.level),Number(n.category_id)).run();
+    signatures.add(signature);added++;
+   }
+   const notice=added?"✅ "+added+" مسیر از پست #"+source.post_id+" به پست #"+pid+" کپی شد.":"ℹ️ مسیرهای پست #"+source.post_id+" از قبل برای این پست ثبت شده‌اند.";
+   return pathList(e,q,pid,notice);
+  }
+  if(d.startsWith("ce_path_add:")){const pid=Number(d.split(":")[1]),pathId=await createPath(e,pid);return pathMenu(e,q,pid,pathId,1);}
  if(d.startsWith("ce_path_edit:")){const a=d.split(":").map(Number);return pathMenu(e,q,a[1],a[2],a[3]||1);}
  if(d.startsWith("ce_path_manage:")){const pid=Number(d.split(":")[1]),paths=await postPaths(e,pid),buttons=paths.map((x,i)=>[{text:"✏️ مسیر "+(i+1),callback_data:"ce_path_edit:"+pid+":"+x.id+":1"},{text:"🗑",callback_data:"ce_path_delete:"+pid+":"+x.id}]);buttons.push([{text:"🔙 بازگشت",callback_data:"ce_paths:"+pid}]);return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"✏️ <b>مدیریت مسیرهای پست #"+pid+"</b>",parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));}
  if(d.startsWith("ce_pick:")){const [,pid,pathId,level,cid]=d.split(":").map(Number);const parent=Number(level)>1?await e.DB.prepare("SELECT category_id FROM home_post_path_nodes WHERE path_id=? AND level=?").bind(pathId,level-1).first():null;const cat=await e.DB.prepare("SELECT parent_id FROM classification_categories WHERE id=?").bind(cid).first();if(Number(level)>1&&(!parent||Number(parent.category_id)!==Number(cat?.parent_id)))return pathMenu(e,q,pid,pathId,level);await e.DB.prepare("DELETE FROM home_post_path_nodes WHERE path_id=? AND level>=?").bind(pathId,level).run();await e.DB.prepare("INSERT INTO home_post_path_nodes(path_id,level,category_id) VALUES(?,?,?)").bind(pathId,level,cid).run();return pathMenu(e,q,pid,pathId,level);}
