@@ -76,9 +76,9 @@ const pathList=async(e,q,postId,notice="")=>{
  const pathMenu=async(e,q,postId,pathId,level,page=0)=>{
  const rows=await pathNodes(e,pathId),current=rows.find(x=>Number(x.level)===level),parent=level===1?null:Number(rows.find(x=>Number(x.level)===level-1)?.category_id||0)||null,allChildren=await children(e,parent),pageSize=12,pageCount=Math.max(1,Math.ceil(allChildren.length/pageSize)),safePage=Math.min(Math.max(0,Number(page)||0),pageCount-1),cs=allChildren.slice(safePage*pageSize,(safePage+1)*pageSize);
  const buttons=cs.map(x=>[{...categoryButton(x,(Number(current?.category_id)===Number(x.id)?"✅ ":"")),callback_data:"ce_pick:"+postId+":"+pathId+":"+level+":"+x.id+":"+safePage}]);
- if(pageCount>1){const nav=[];if(safePage>0)nav.push({text:"⬅️ گزینه‌های بعدی",callback_data:"ce_path_edit:"+postId+":"+pathId+":"+level+":"+(safePage-1)});if(safePage+1<pageCount)nav.push({text:"گزینه‌های قبلی ➡️",callback_data:"ce_path_edit:"+postId+":"+pathId+":"+level+":"+(safePage+1)});if(nav.length)buttons.push(nav);}
+ if(pageCount>1){const nav=[];if(safePage>0)nav.push({text:"⬅️ صفحهٔ قبل",callback_data:"ce_path_edit:"+postId+":"+pathId+":"+level+":"+(safePage-1)});if(safePage+1<pageCount)nav.push({text:"صفحهٔ بعد ➡️",callback_data:"ce_path_edit:"+postId+":"+pathId+":"+level+":"+(safePage+1)});if(nav.length)buttons.push(nav);}
  if(level>1)buttons.push([{text:"⬅️ سطح قبل",callback_data:"ce_path_edit:"+postId+":"+pathId+":"+(level-1)}]);
- buttons.push([{text:"➕ طبقه جدید",callback_data:"ce_newcat:"+postId+":"+pathId+":"+level+":"+(parent||0)}]);
+ buttons.push([{text:"➕ طبقه جدید",callback_data:"ce_newcat:"+postId+":"+pathId+":"+level+":"+(parent||0)+":"+safePage}]);
  if(current)buttons.push([{text:"➕ افزودن سطح بعدی",callback_data:"ce_path_edit:"+postId+":"+pathId+":"+(level+1)}]);
  buttons.push([{text:"🏷 پایان سطح‌ها و ثبت عنوان",callback_data:"ce_title:"+postId}],[{text:"✅ ذخیره این مسیر",callback_data:"ce_path_done:"+postId+":"+pathId}],[{text:"🗑 حذف این مسیر",callback_data:"ce_path_delete:"+postId+":"+pathId}],[{text:"🔙 فهرست مسیرها",callback_data:"ce_paths:"+postId}]);
  const shown=rows.length?rows.map(x=>x.name).join(" → "):"هنوز انتخابی نشده";
