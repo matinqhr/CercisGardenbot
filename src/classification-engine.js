@@ -144,13 +144,14 @@ export default{async fetch(req,e){
  await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
  if(d==="classification_engine"||d==="ce_continue")return render(e,q);
   if(d.startsWith("ce_previous_posts:")){
-   const page=Math.max(0,Number(d.split(":")[1])||0),s=await setting(e),current=Math.max(1,Number(s?.next_message_id)||1),pageSize=25,start=current-1-page*pageSize,end=Math.max(1,start-pageSize+1),lines=[];
-   for(let n=start;n>=end&&n>=1;n--)lines.push('<a href="https://t.me/'+HOME+'/'+n+'">پست #'+n+'</a>');
+   const page=Math.max(0,Number(d.split(":")[1])||0),s=await setting(e),current=Math.max(1,Number(s?.next_message_id)||1),pageSize=25,offset=page*pageSize;
+   const found=(await e.DB.prepare("WITH RECURSIVE nums(post_id) AS (SELECT ? WHERE ?>0 UNION ALL SELECT post_id-1 FROM nums WHERE post_id>1) SELECT nums.post_id FROM nums LEFT JOIN home_archive_posts p ON p.message_id=nums.post_id WHERE COALESCE(p.status,'pending')!='deleted' AND NOT EXISTS (SELECT 1 FROM home_post_paths hp WHERE hp.post_id=nums.post_id) ORDER BY nums.post_id DESC LIMIT ? OFFSET ?").bind(current-1,current-1,pageSize+1,offset).all()).results||[];
+   const shown=found.slice(0,pageSize),lines=shown.map(x=>'<a href="https://t.me/'+HOME+'/'+Number(x.post_id)+'">پست #'+Number(x.post_id)+'</a>');
    const buttons=[];
    if(page>0)buttons.push({text:"⬅️ پست‌های جدیدتر",callback_data:"ce_previous_posts:"+(page-1)});
-   if(end>1)buttons.push({text:"پست‌های قدیمی‌تر ➡️",callback_data:"ce_previous_posts:"+(page+1)});
+   if(found.length>pageSize)buttons.push({text:"پست‌های قدیمی‌تر ➡️",callback_data:"ce_previous_posts:"+(page+1)});
    const keyboard=[];if(buttons.length)keyboard.push(buttons);keyboard.push([{text:"🔙 بازگشت به موتور",callback_data:"classification_engine"}]);
-   return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"📋 <b>پست‌های پیش از #"+current+"</b>\n\n"+(lines.length?lines.join("\n"):"پستی پیش از شمارهٔ فعلی وجود ندارد."),parse_mode:"HTML",reply_markup:{inline_keyboard:keyboard}}));
+   return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"📋 <b>پست‌های طبقه‌بندی‌نشده پیش از #"+current+"</b>\n\n"+(lines.length?lines.join("\n"):"پست طبقه‌بندی‌نشده‌ای پیش از شمارهٔ فعلی پیدا نشد."),parse_mode:"HTML",reply_markup:{inline_keyboard:keyboard}}));
   }
   
  if(d==="ce_goto")return gotoPrompt(e,q);
