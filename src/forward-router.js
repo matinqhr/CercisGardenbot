@@ -29,13 +29,12 @@ async function inlineSearch(req,e,q){
  const terms=[...new Set(norm(query).split(" ").filter(Boolean))].slice(0,6);
  let rows=[];
  try{
-  await e.DB.prepare("CREATE TABLE IF NOT EXISTS home_post_overviews(post_id INTEGER PRIMARY KEY,overview TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
-  try{
-   const matchExpr=field=>"lower(replace(replace(replace(COALESCE("+field+",''),'ي','ی'),'ك','ک'),char(8204),' ')) LIKE ?";
-   const conditions=terms.map(()=>"( "+matchExpr("p.title")+" OR EXISTS (SELECT 1 FROM home_post_keywords k WHERE k.post_id=p.message_id AND "+matchExpr("k.keyword")+") OR EXISTS (SELECT 1 FROM home_post_overviews o2 WHERE o2.post_id=p.message_id AND "+matchExpr("o2.overview")+") )").join(" AND ");
-   const params=terms.flatMap(t=>{const v="%"+t+"%";return [v,v,v]});
-   const sql="SELECT p.message_id,p.title,p.url,(SELECT GROUP_CONCAT(k.keyword,' ') FROM home_post_keywords k WHERE k.post_id=p.message_id) keywords,COALESCE(o.overview,'') overview,COALESCE(o.photo_file_id,'') photo_file_id,COALESCE(o.updated_at,'') overview_updated_at,EXISTS(SELECT 1 FROM home_post_lyrics l WHERE l.post_id=p.message_id) AS has_lyrics FROM home_archive_posts p LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE COALESCE(p.status,'pending')!='deleted' AND "+conditions+" ORDER BY p.message_id DESC LIMIT 30";
-   rows=(await e.DB.prepare(sql).bind(...params).all()).results||[]; }catch(err){console.error("[INLINE_SEARCH]",err)}
+  const matchExpr=field=>"lower(replace(replace(replace(COALESCE("+field+",''),'ي','ی'),'ك','ک'),char(8204),' ')) LIKE ?";
+  const conditions=terms.map(()=>"( "+matchExpr("p.title")+" OR EXISTS (SELECT 1 FROM home_post_keywords k WHERE k.post_id=p.message_id AND "+matchExpr("k.keyword")+") OR EXISTS (SELECT 1 FROM home_post_overviews o2 WHERE o2.post_id=p.message_id AND "+matchExpr("o2.overview")+") )").join(" AND ");
+  const params=terms.flatMap(t=>{const v="%"+t+"%";return [v,v,v]});
+  const sql="SELECT p.message_id,p.title,p.url,(SELECT GROUP_CONCAT(k.keyword,' ') FROM home_post_keywords k WHERE k.post_id=p.message_id) keywords,COALESCE(o.overview,'') overview,COALESCE(o.photo_file_id,'') photo_file_id,COALESCE(o.updated_at,'') overview_updated_at,EXISTS(SELECT 1 FROM home_post_lyrics l WHERE l.post_id=p.message_id) AS has_lyrics FROM home_archive_posts p LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE COALESCE(p.status,'pending')!='deleted' AND "+conditions+" ORDER BY p.message_id DESC LIMIT 30";
+  rows=(await e.DB.prepare(sql).bind(...params).all()).results||[];
+ }catch(err){console.error("[INLINE_SEARCH]",err)}
  const results=rows.map(r=>{
   const url=String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id));
   const title=String(r.title||("پست #"+r.message_id)).slice(0,256);
