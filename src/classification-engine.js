@@ -8,27 +8,45 @@ const admin=(e,id)=>String(e.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Bo
 const HOME="Arghavanplaylistt";
 
 const ensure=async e=>{
+ let stage="شروع بررسی ساختار دیتابیس";
+ try{
+ stage="home_archive_posts";
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS home_archive_posts(message_id INTEGER PRIMARY KEY,channel TEXT NOT NULL DEFAULT 'Arghavanplaylistt',url TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',future_dossier INTEGER NOT NULL DEFAULT 0,title TEXT,title_emoji TEXT,title_emoji_id TEXT,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
  try{await e.DB.prepare("ALTER TABLE home_archive_posts ADD COLUMN title_emoji TEXT").run()}catch{}
  try{await e.DB.prepare("ALTER TABLE home_archive_posts ADD COLUMN title_emoji_id TEXT").run()}catch{}
  try{await e.DB.prepare("ALTER TABLE home_archive_posts ADD COLUMN title TEXT").run()}catch{}
+ stage="classification_categories table";
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS classification_categories(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,parent_id INTEGER,emoji TEXT,emoji_id TEXT,sort_order INTEGER NOT NULL DEFAULT 0)").run();
+ stage="classification_categories unique index";
  await e.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS classification_categories_sibling_name ON classification_categories(COALESCE(parent_id,0),name)").run();
+ stage="classification_categories parent index";
  await e.DB.prepare("CREATE INDEX IF NOT EXISTS classification_categories_parent_order ON classification_categories(parent_id,sort_order,id)").run();
+ stage="home_post_paths table";
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS home_post_paths(id INTEGER PRIMARY KEY AUTOINCREMENT,post_id INTEGER NOT NULL,sort_order INTEGER NOT NULL DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
+ stage="home_post_paths index";
  await e.DB.prepare("CREATE INDEX IF NOT EXISTS home_post_paths_post ON home_post_paths(post_id,sort_order,id)").run();
+ stage="home_post_path_nodes table";
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS home_post_path_nodes(path_id INTEGER NOT NULL,level INTEGER NOT NULL,category_id INTEGER NOT NULL,PRIMARY KEY(path_id,level),UNIQUE(path_id,category_id))").run();
+ stage="home_post_path_nodes index";
  await e.DB.prepare("CREATE INDEX IF NOT EXISTS home_post_path_nodes_category ON home_post_path_nodes(category_id,path_id)").run();
+ stage="home_post_keywords table";
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS home_post_keywords(post_id INTEGER NOT NULL,keyword TEXT NOT NULL,PRIMARY KEY(post_id,keyword))").run();
+ stage="home_post_lyrics table";
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS home_post_lyrics(post_id INTEGER PRIMARY KEY,lyrics TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
+ stage="home_post_overviews table";
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS home_post_overviews(post_id INTEGER PRIMARY KEY,overview TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
  try{await e.DB.prepare("ALTER TABLE home_post_overviews ADD COLUMN photo_file_id TEXT").run()}catch{}
+ stage="classification_settings table";
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS classification_settings(id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER NOT NULL DEFAULT 1,library_enabled INTEGER NOT NULL DEFAULT 0,next_message_id INTEGER NOT NULL DEFAULT 1,last_message_id INTEGER NOT NULL DEFAULT 0)").run();
+ stage="user_library_preferences table";
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS user_library_preferences(user_id INTEGER PRIMARY KEY,sort_mode TEXT NOT NULL DEFAULT 'cercis',updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
  try{await e.DB.prepare("ALTER TABLE classification_settings ADD COLUMN library_enabled INTEGER NOT NULL DEFAULT 0").run()}catch{}
+ stage="classification_settings insert";
  await e.DB.prepare("INSERT OR IGNORE INTO classification_settings(id) VALUES(1)").run();
+ stage="classification_categories count";
  const n=await e.DB.prepare("SELECT COUNT(*) n FROM classification_categories").first();
  if(!Number(n?.n))for(const [name,emoji,sort] of [["🎵 موسیقی","🎵",1],["📖 نقل‌قول","📖",2],["🖼 تصویر","🖼",3],["🎬 ویدیو","🎬",4],["💭 نوشته","💭",5],["🌅 Daily","🌅",6]])await e.DB.prepare("INSERT OR IGNORE INTO classification_categories(name,emoji,sort_order) VALUES(?,?,?)").bind(name,emoji,sort).run();
+ }catch(err){console.error("[CERCIS_SCHEMA_STEP]",stage,String(err),err?.message||"");throw err;}
 };
 
 const setting=async e=>e.DB.prepare("SELECT * FROM classification_settings WHERE id=1").first();
