@@ -7,7 +7,12 @@ const categoryButton=(c,prefix="",suffix="")=>{const name=String(c?.name||"");co
 const admin=(e,id)=>String(e.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean).includes(String(id));
 const HOME="Arghavanplaylistt";
 
+let schemaReady=false;
+let schemaPromise=null;
 const ensure=async e=>{
+ if(schemaReady)return;
+ if(schemaPromise)return schemaPromise;
+ schemaPromise=(async()=>{
  let stage="شروع بررسی ساختار دیتابیس";
  try{
  stage="home_archive_posts";
@@ -47,6 +52,8 @@ const ensure=async e=>{
  const n=await e.DB.prepare("SELECT COUNT(*) n FROM classification_categories").first();
  if(!Number(n?.n))for(const [name,emoji,sort] of [["🎵 موسیقی","🎵",1],["📖 نقل‌قول","📖",2],["🖼 تصویر","🖼",3],["🎬 ویدیو","🎬",4],["💭 نوشته","💭",5],["🌅 Daily","🌅",6]])await e.DB.prepare("INSERT OR IGNORE INTO classification_categories(name,emoji,sort_order) VALUES(?,?,?)").bind(name,emoji,sort).run();
  }catch(err){console.error("[CERCIS_SCHEMA_STEP]",stage,String(err),err?.message||"");throw err;}
+ })();
+ try{await schemaPromise;schemaReady=true;}catch(err){schemaPromise=null;throw err;}
 };
 
 const setting=async e=>e.DB.prepare("SELECT * FROM classification_settings WHERE id=1").first();
