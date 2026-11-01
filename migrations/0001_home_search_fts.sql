@@ -39,7 +39,7 @@ BEGIN
 END;
 
 -- Initial backfill. Persian/Arabic character normalization matches the current
--- inline-search SQL: ي -> ی, ك -> ک, and ZWNJ -> space.
+-- inline-search SQL: ي -> ی, ك -> ک, and ZWNJ/tatweel -> space.
 INSERT INTO home_search_documents(post_id, content)
 SELECT
   p.message_id,
@@ -59,7 +59,9 @@ SELECT
         'ك', 'ک'
       ),
       char(8204), ' '
-    )
+    ),
+    char(1600), ' '
+  )
   )
 FROM home_archive_posts p
 LEFT JOIN home_post_overviews o ON o.post_id = p.message_id
