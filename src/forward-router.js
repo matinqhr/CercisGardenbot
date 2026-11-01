@@ -5,8 +5,6 @@ async function serveInlineThumb(req,e,postId){
  const id=Number(postId);
  if(!Number.isSafeInteger(id)||id<1)return new Response("Not found",{status:404});
  try{
-  await e.DB.prepare("CREATE TABLE IF NOT EXISTS home_post_overviews(post_id INTEGER PRIMARY KEY,overview TEXT NOT NULL,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
-  try{await e.DB.prepare("ALTER TABLE home_post_overviews ADD COLUMN photo_file_id TEXT").run()}catch{}
   const row=await e.DB.prepare("SELECT photo_file_id FROM home_post_overviews WHERE post_id=?").bind(id).first();
   if(!row?.photo_file_id)return new Response("Not found",{status:404});
   const fileInfo=await tg(e,"getFile",{file_id:row.photo_file_id});
