@@ -21,7 +21,7 @@ async function inlineSearch(req,e,q){
  const iq=q?.inline_query;
  if(!iq)return null;
  const query=String(iq.query||"").trim();
- if(!query)return out(await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results:[],cache_time:0,is_personal:true}));
+ if(!query)return out(await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results:[],cache_time:10,is_personal:true}));
  const norm=s=>String(s||"").toLocaleLowerCase("fa").replace(/ي/g,"ی").replace(/ك/g,"ک").replace(/[‌ـ]/g," ").replace(/\s+/g," ").trim();
  const html=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
  const terms=[...new Set(norm(query).split(" ").filter(Boolean))].slice(0,6);
@@ -51,7 +51,7 @@ async function inlineSearch(req,e,q){
    :{message_text:url};
   return {type:"article",id:String(r.message_id),title,description,input_message_content,reply_markup:{inline_keyboard:[buttons]}};
  });
- return out(await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results,cache_time:0,is_personal:true}));
+ return out(await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results,cache_time:10,is_personal:true}));
 }
 
 const admin = (e, id) => String(e.ADMIN_ID || "").split(",").map(x => x.trim()).filter(Boolean).includes(String(id));
