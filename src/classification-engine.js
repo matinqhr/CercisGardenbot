@@ -60,7 +60,7 @@ const setting=async e=>e.DB.prepare("SELECT * FROM classification_settings WHERE
 const refreshSearchDocument=async(e,postId)=>{
  const id=Number(postId);
  if(!Number.isSafeInteger(id)||id<1)return;
- const sql="INSERT INTO home_search_documents(post_id,content) SELECT p.message_id,lower(replace(replace(replace(COALESCE(p.title,'')||' '||COALESCE((SELECT GROUP_CONCAT(k.keyword,' ') FROM home_post_keywords k WHERE k.post_id=p.message_id),'')||' '||COALESCE(o.overview,''),'ي','ی'),'ك','ک'),char(8204),' ')) FROM home_archive_posts p LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE p.message_id=? ON CONFLICT(post_id) DO UPDATE SET content=excluded.content";
+ const sql="INSERT INTO home_search_documents(post_id,content) SELECT p.message_id,lower(replace(replace(replace(replace(COALESCE(p.title,'')||' '||COALESCE((SELECT GROUP_CONCAT(k.keyword,' ') FROM home_post_keywords k WHERE k.post_id=p.message_id),'')||' '||COALESCE(o.overview,''),'ي','ی'),'ك','ک'),char(8204),' '),char(1600),' ')) FROM home_archive_posts p LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE p.message_id=? ON CONFLICT(post_id) DO UPDATE SET content=excluded.content";
  await e.DB.prepare(sql).bind(id).run();
 };
 const children=async(e,parent,mode="cercis")=>{
