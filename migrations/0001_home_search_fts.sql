@@ -47,6 +47,7 @@ SELECT
     replace(
       replace(
         replace(
+          replace(
           COALESCE(p.title, '') || ' ' ||
           COALESCE((
             SELECT GROUP_CONCAT(k.keyword, ' ')
