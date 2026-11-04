@@ -228,7 +228,8 @@ export async function handle(e, update) {
   const message = update.message;
   if (!message) return null;
 
-  if (String(message.text || "").trim() === "/musicbridge_id" && isAdmin(e, message.from?.id)) {
+  const command = String(message.text || "").trim().split(/\s+/, 1)[0].split("@")[0].toLowerCase();
+  if (command === "/musicbridge_id" && isAdmin(e, message.from?.id)) {
     if (message.chat?.type !== "group" && message.chat?.type !== "supergroup") {
       await sendText(e, message.chat.id, "این دستور را داخل گروه Cercis Gap بفرست، نه در گفت‌وگوی خصوصی.");
       return out({ ok: true });
