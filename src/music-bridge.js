@@ -223,6 +223,10 @@ export async function handle(e, update) {
   if (!message) return null;
 
   if (String(message.text || "").trim() === "/musicbridge_id" && isAdmin(e, message.from?.id)) {
+    if (message.chat?.type !== "group" && message.chat?.type !== "supergroup") {
+      await sendText(e, message.chat.id, "این دستور را داخل گروه Cercis Gap بفرست، نه در گفت‌وگوی خصوصی.");
+      return out({ ok: true });
+    }
     await sendText(e, message.chat.id, "شناسه گروه Cercis Gap:\n" + String(message.chat.id));
     return out({ ok: true });
   }
