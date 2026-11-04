@@ -18,7 +18,7 @@ const isAdmin = (e, id) => String(e.ADMIN_ID || "")
   .includes(String(id));
 
 const configuredGroup = e => String(e.MUSIC_BRIDGE_CHAT_ID || "").trim();
-const configuredBot = e => String(e.MUSIC_BOT_USERNAME || "Cercisbrainbot")
+const configuredBot = e => String(e.MUSIC_BOT_USERNAME || "Cersisbrainbot")
   .trim()
   .replace(/^@/, "")
   .toLowerCase();
