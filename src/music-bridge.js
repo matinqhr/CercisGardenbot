@@ -155,7 +155,13 @@ async function acceptVideo(e, message) {
     "UPDATE music_bridge_requests SET status='waiting_audio', bridge_message_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='sending_video'"
   ).bind(copied.result.message_id, request.id).run();
 
-  await sendText(e, message.chat.id, "📨 ویدیو به گروه آزمایش رسید. منتظر فایل موسیقی از ربات شناسایی هستم…");
+  const latest = await e.DB.prepare(
+    "SELECT status FROM music_bridge_requests WHERE id=?"
+  ).bind(request.id).first();
+
+  if (latest?.status === "waiting_audio") {
+    await sendText(e, message.chat.id, "📨 ویدیو به گروه آزمایش رسید. منتظر فایل موسیقی از ربات شناسایی هستم…");
+  }
   return out({ ok: true });
 }
 
