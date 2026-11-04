@@ -109,6 +109,15 @@ async function cancelTest(e, message) {
 }
 
 async function acceptVideo(e, message) {
+  const isVideo = Boolean(
+    message.video?.file_id ||
+    (message.document?.file_id && String(message.document.mime_type || "").toLowerCase().startsWith("video/"))
+  );
+
+  // Only inspect actual video uploads; ordinary commands and text messages
+  // must continue through the normal router even before the bridge migration.
+  if (!isVideo) return null;
+
   const userId = message.from?.id;
   const request = await e.DB.prepare(
     "SELECT * FROM music_bridge_requests WHERE user_id=? AND status='awaiting_video' " +
@@ -116,16 +125,6 @@ async function acceptVideo(e, message) {
   ).bind(userId).first();
 
   if (!request) return null;
-
-  const isVideo = Boolean(
-    message.video?.file_id ||
-    (message.document?.file_id && String(message.document.mime_type || "").toLowerCase().startsWith("video/"))
-  );
-
-  if (!isVideo) {
-    await sendText(e, message.chat.id, "لطفاً خودِ فایل ویدیو را ارسال کن؛ لینک یا متن برای این آزمایش کافی نیست.");
-    return out({ ok: true });
-  }
 
   const claimed = await e.DB.prepare(
     "UPDATE music_bridge_requests SET status='sending_video', source_message_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='awaiting_video'"
@@ -238,7 +237,7 @@ export async function handle(e, update) {
     return out({ ok: true });
   }
 
-  if (String(message.text || "").trim() === "/musicbridge_cancel" && isAdmin(e, message.from?.id) && message.chat?.type === "private") {
+  if (command === "/musicbridge_cancel" && isAdmin(e, message.from?.id) && message.chat?.type === "private") {
     return cancelTest(e, message);
   }
 
