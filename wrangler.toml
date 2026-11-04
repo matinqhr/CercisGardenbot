@@ -9,6 +9,9 @@ database_id = "79e38c86-9b37-4f07-90ab-fa71d160fe35"
 
 [vars]
 # Set BOT_TOKEN, ADMIN_ID and WEBHOOK_SECRET as encrypted Worker secrets.
+# For the admin-only music bridge test, configure these Worker variables in Cloudflare:
+# MUSIC_BRIDGE_CHAT_ID = "-100..."  (use /musicbridge_id in Cercis Gap to obtain it)
+# MUSIC_BOT_USERNAME = "your_music_bot_username"  (without the leading @)
 
 [assets]
 directory = "./mini-app/dist"
