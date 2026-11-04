@@ -127,9 +127,14 @@ async function acceptVideo(e, message) {
     return out({ ok: true });
   }
 
-  await e.DB.prepare(
+  const claimed = await e.DB.prepare(
     "UPDATE music_bridge_requests SET status='sending_video', source_message_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='awaiting_video'"
   ).bind(message.message_id, request.id).run();
+
+  if (Number(claimed?.meta?.changes || 0) !== 1) {
+    await sendText(e, message.chat.id, "این درخواست قبلاً با یک ویدیو ثبت شده است.");
+    return out({ ok: true });
+  }
 
   const copied = await tg(e, "copyMessage", {
     chat_id: request.group_id,
