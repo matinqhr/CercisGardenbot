@@ -210,15 +210,11 @@ function stripExistingId3(bytes) {
   }
 
   if (end <= start) throw new Error("INVALID_MP3");
-  let hasMpegFrame = false;
-  const scanEnd = Math.min(end - 1, start + 4096);
-  for (let i = start; i < scanEnd; i++) {
-    if (bytes[i] === 0xff && (bytes[i + 1] & 0xe0) === 0xe0) {
-      hasMpegFrame = true;
-      break;
-    }
-  }
-  if (!hasMpegFrame) throw new Error("INVALID_MP3");
+  const startsWithMpegFrame =
+    start + 1 < end &&
+    bytes[start] === 0xff &&
+    (bytes[start + 1] & 0xe0) === 0xe0;
+  if (!startsWithMpegFrame) throw new Error("INVALID_MP3");
   return { start, end };
 }
 
@@ -230,6 +226,9 @@ async function registerCover(e, message) {
   }
 
   try {
+    if (Number(chosen.width) > 320 || Number(chosen.height) > 320) {
+      throw new Error("COVER_DIMENSIONS_TOO_LARGE");
+    }
     const bytes = await downloadTelegramFile(e, chosen.file_id, MAX_COVER_BYTES);
     if (!isJpeg(bytes)) throw new Error("COVER_NOT_JPEG");
     await saveSetting(e, "cover_file_id", chosen.file_id);
@@ -244,7 +243,9 @@ async function registerCover(e, message) {
     console.error("[MUSIC_TAGGER_COVER]", error);
     const description = error?.message === "FILE_TOO_LARGE"
       ? "حجم نسخهٔ کوچک تصویر هم بیشتر از ۲۰۰ کیلوبایت است. لطفاً تصویر را دوباره به‌صورت Photo بفرست."
-      : "تصویر باید JPEG باشد و نسخهٔ کوچک آن حداکثر ۲۰۰ کیلوبایت حجم داشته باشد.";
+      : error?.message === "COVER_DIMENSIONS_TOO_LARGE"
+        ? "نسخهٔ کوچک عکس باید حداکثر ۳۲۰×۳۲۰ پیکسل باشد. لطفاً تصویر را به‌صورت Photo بفرست تا تلگرام نسخهٔ کوچک بسازد."
+        : "تصویر باید JPEG باشد و نسخهٔ کوچک آن حداکثر ۳۲۰×۳۲۰ پیکسل و ۲۰۰ کیلوبایت حجم داشته باشد.";
     await sendText(e, message.chat.id, "❌ " + description);
   }
 }
