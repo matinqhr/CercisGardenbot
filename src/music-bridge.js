@@ -154,12 +154,33 @@ async function acceptVideo(e, message) {
     "UPDATE music_bridge_requests SET status='waiting_audio', bridge_message_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='sending_video'"
   ).bind(copied.result.message_id, request.id).run();
 
+  // Ask the recognition bot to process the copied video by replying to it.
+  // Explicitly address the command to the configured recognition bot.
+  const searchCommand = await tg(e, "sendMessage", {
+    chat_id: request.group_id,
+    text: "/search@" + configuredBot(e),
+    reply_parameters: { message_id: copied.result.message_id }
+  });
+
+  if (!searchCommand?.ok) {
+    await e.DB.prepare(
+      "UPDATE music_bridge_requests SET status='failed', updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='waiting_audio'"
+    ).bind(request.id).run();
+    console.error("[MUSIC_BRIDGE_SEARCH_COMMAND]", JSON.stringify(searchCommand));
+    await sendText(
+      e,
+      message.chat.id,
+      "❌ ویدیو به گروه رسید، اما ارسال دستور /search به ربات شناسایی ناموفق بود. جزئیات خطا در گزارش Worker ثبت شد."
+    );
+    return out({ ok: true });
+  }
+
   const latest = await e.DB.prepare(
     "SELECT status FROM music_bridge_requests WHERE id=?"
   ).bind(request.id).first();
 
   if (latest?.status === "waiting_audio") {
-    await sendText(e, message.chat.id, "📨 ویدیو به گروه آزمایش رسید. منتظر فایل موسیقی از ربات شناسایی هستم…");
+    await sendText(e, message.chat.id, "📨 ویدیو به گروه آزمایش رسید و دستور /search روی آن ارسال شد. منتظر فایل موسیقی از ربات شناسایی هستم…");
   }
   return out({ ok: true });
 }
