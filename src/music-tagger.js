@@ -252,12 +252,10 @@ async function registerCover(e, message) {
 function audioFromMessage(message) {
   const audio = message.audio || message.document;
   if (!audio?.file_id) return null;
-  const fileName = String(audio.file_name || "music.mp3");
+  const providedName = String(audio.file_name || "");
+  const fileName = providedName || "music.mp3";
   const mimeType = String(audio.mime_type || "").toLowerCase();
-  const isMp3 =
-    /\.mp3$/i.test(fileName) ||
-    mimeType === "audio/mpeg" ||
-    (Boolean(message.audio) && !mimeType);
+  const isMp3 = /\.mp3$/i.test(providedName) || mimeType === "audio/mpeg";
   if (!isMp3) return { unsupported: true, file_name: fileName, mime_type: mimeType };
   return {
     file_id: audio.file_id,
@@ -332,11 +330,14 @@ async function processAudio(e, message, session, rawTitle) {
     console.error("[MUSIC_TAGGER_PROCESS]", error);
     let description = "پردازش فایل ناموفق بود. فایل را دوباره بررسی کن و نام قطعه را مجدداً بفرست تا تلاش کنیم.";
     if (error?.message === "FILE_TOO_LARGE") {
-      description = "حجم MP3 برای دانلود از Telegram Bot API بیشتر از محدودیت این نسخه است (۱۲ مگابایت). فایل کوچک‌تری بفرست.";
+      await setSession(e, message.from.id, "await_audio");
+      description = "حجم MP3 برای این نسخه بیشتر از ۱۲ مگابایت است. لطفاً فایل کوچک‌تری بفرست.";
     } else if (error?.message === "INVALID_MP3") {
+      await setSession(e, message.from.id, "await_audio");
       description = "فایل ارسالی ساختار MP3 قابل‌ویرایش ندارد. لطفاً یک فایل واقعی با پسوند MP3 بفرست.";
     } else if (error?.message === "INVALID_ID3_HEADER") {
-      description = "تگ فعلی فایل MP3 معتبر نیست و نمی‌توانم بدون ریسک به فایل دست بزنم.";
+      await setSession(e, message.from.id, "await_audio");
+      description = "تگ فعلی فایل MP3 معتبر نیست. لطفاً یک فایل دیگر بفرست.";
     } else if (error?.message === "SEND_AUDIO_FAILED") {
       description = "فایل ویرایش شد، اما Telegram آن را نپذیرفت. نشست حفظ شده؛ نام قطعه را دوباره بفرست تا دوباره ارسال شود.";
     }
@@ -422,7 +423,11 @@ export async function handle(e, update) {
     return new Response("ok");
   }
 
-  if (session.step === "await_title" && message.text) {
+  if (session.step === "await_title") {
+    if (!message.text) {
+      await sendText(e, message.chat.id, "🏷️ لطفاً نام قطعه را به‌صورت پیام متنی بفرست.");
+      return new Response("ok");
+    }
     await processAudio(e, message, session, message.text);
     return new Response("ok");
   }
