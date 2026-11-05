@@ -397,38 +397,6 @@ function makeId3Tag(title, artist, coverBytes) {
   ]);
 }
 
-function stripExistingId3(bytes) {
-  let start = 0;
-  let end = bytes.length;
-
-  if (bytes.length >= 10 &&
-      bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
-    const sizeBytes = bytes.subarray(6, 10);
-    if (sizeBytes.some(value => value & 0x80)) throw new Error("INVALID_ID3_HEADER");
-    const tagSize =
-      (sizeBytes[0] << 21) |
-      (sizeBytes[1] << 14) |
-      (sizeBytes[2] << 7) |
-      sizeBytes[3];
-    start = 10 + tagSize + ((bytes[5] & 0x10) ? 10 : 0);
-    if (start >= end) throw new Error("INVALID_ID3_HEADER");
-  }
-
-  if (end - start >= 128 &&
-      bytes[end - 128] === 0x54 &&
-      bytes[end - 127] === 0x41 &&
-      bytes[end - 126] === 0x47) {
-    end -= 128;
-  }
-
-  if (end <= start) throw new Error("INVALID_MP3");
-  const startsWithMpegFrame =
-    start + 1 < end &&
-    bytes[start] === 0xff &&
-    (bytes[start + 1] & 0xe0) === 0xe0;
-  if (!startsWithMpegFrame) throw new Error("INVALID_MP3");
-  return { start, end };
-}
 
 async function registerCover(e, message) {
   const chosen = chooseCoverPhoto(message.photo);
@@ -533,6 +501,9 @@ async function processAudio(e, message, session, rawTitle) {
     if (error?.message === "FILE_TOO_LARGE") {
       await setSession(e, message.from.id, "await_audio");
       description = "حجم MP3 برای این نسخه بیشتر از ۱۲ مگابایت است. لطفاً فایل کوچک‌تری بفرست.";
+    } else if (error?.message === "FILE_SIZE_UNKNOWN" || error?.message === "FILE_SIZE_MISMATCH") {
+      await setSession(e, message.from.id, "await_audio");
+      description = "اندازهٔ فایل از پاسخ تلگرام قابل‌تأیید نبود. لطفاً فایل MP3 را دوباره ارسال کن.";
     } else if (error?.message === "INVALID_MP3") {
       await setSession(e, message.from.id, "await_audio");
       description = "فایل ارسالی ساختار MP3 قابل‌ویرایش ندارد. لطفاً یک فایل واقعی با پسوند MP3 بفرست.";
