@@ -88,6 +88,218 @@ async function downloadTelegramFile(e, fileId, maxBytes) {
   return bytes;
 }
 
+async function openTelegramFileStream(e, fileId, maxBytes) {
+  const info = await tg(e, "getFile", { file_id: fileId });
+  if (!info?.ok || !info.result?.file_path) {
+    throw new Error("TELEGRAM_GET_FILE_FAILED: " + (info?.description || "unknown"));
+  }
+
+  const reportedSize = Number(info.result.file_size || 0);
+  if (reportedSize > maxBytes) throw new Error("FILE_TOO_LARGE");
+
+  const response = await fetch(
+    "https://api.telegram.org/file/bot" + e.BOT_TOKEN + "/" + info.result.file_path
+  );
+  if (!response.ok || !response.body) throw new Error("TELEGRAM_DOWNLOAD_FAILED");
+
+  const headerSize = Number(response.headers.get("content-length") || 0);
+  const size = reportedSize || headerSize;
+  if (!Number.isSafeInteger(size) || size <= 0) throw new Error("FILE_SIZE_UNKNOWN");
+  if (size > maxBytes || (headerSize && headerSize > maxBytes)) throw new Error("FILE_TOO_LARGE");
+  if (reportedSize && headerSize && reportedSize !== headerSize) {
+    throw new Error("FILE_SIZE_MISMATCH");
+  }
+
+  return { body: response.body, size };
+}
+
+async function prepareMp3Stream(body, fileSize) {
+  const reader = body.getReader();
+  const prefixParts = [];
+  let prefixLength = 0;
+  let remainder = null;
+
+  while (prefixLength < 10) {
+    const item = await reader.read();
+    if (item.done) throw new Error("INVALID_MP3");
+    if (!item.value?.length) continue;
+    const needed = 10 - prefixLength;
+    if (item.value.length <= needed) {
+      prefixParts.push(item.value);
+      prefixLength += item.value.length;
+    } else {
+      prefixParts.push(item.value.subarray(0, needed));
+      remainder = item.value.subarray(needed);
+      prefixLength = 10;
+    }
+  }
+
+  const prefix = concatBytes(prefixParts);
+  let leadingTagBytes = 0;
+  const hasId3 = prefix[0] === 0x49 && prefix[1] === 0x44 && prefix[2] === 0x33;
+
+  if (hasId3) {
+    const sizeBytes = prefix.subarray(6, 10);
+    if (sizeBytes.some(value => value & 0x80)) throw new Error("INVALID_ID3_HEADER");
+    const tagSize =
+      (sizeBytes[0] << 21) |
+      (sizeBytes[1] << 14) |
+      (sizeBytes[2] << 7) |
+      sizeBytes[3];
+    leadingTagBytes = 10 + tagSize + ((prefix[5] & 0x10) ? 10 : 0);
+    if (leadingTagBytes >= fileSize) throw new Error("INVALID_ID3_HEADER");
+  } else if (!(prefix[0] === 0xff && (prefix[1] & 0xe0) === 0xe0)) {
+    throw new Error("INVALID_MP3");
+  }
+
+  const audioSize = fileSize - leadingTagBytes;
+  if (audioSize < 4) throw new Error("INVALID_MP3");
+
+  async function* chunks() {
+    if (!hasId3) {
+      yield prefix;
+      if (remainder?.length) yield remainder;
+    } else {
+      let current = remainder;
+      let offset = 0;
+      let toSkip = leadingTagBytes - 10;
+
+      async function ensureCurrent() {
+        while (!current || offset >= current.length) {
+          const next = await reader.read();
+          if (next.done) throw new Error("INVALID_ID3_HEADER");
+          current = next.value;
+          offset = 0;
+          if (!current?.length) continue;
+        }
+      }
+
+      while (toSkip > 0) {
+        await ensureCurrent();
+        const available = current.length - offset;
+        const take = Math.min(toSkip, available);
+        offset += take;
+        toSkip -= take;
+      }
+
+      const frameHeaderParts = [];
+      let frameHeaderLength = 0;
+      while (frameHeaderLength < 2) {
+        await ensureCurrent();
+        const take = Math.min(2 - frameHeaderLength, current.length - offset);
+        frameHeaderParts.push(current.subarray(offset, offset + take));
+        offset += take;
+        frameHeaderLength += take;
+      }
+      const frameHeader = concatBytes(frameHeaderParts);
+      if (frameHeader[0] !== 0xff || (frameHeader[1] & 0xe0) !== 0xe0) {
+        throw new Error("INVALID_MP3");
+      }
+
+      yield frameHeader;
+      if (current && offset < current.length) yield current.subarray(offset);
+    }
+
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      if (next.value?.length) yield next.value;
+    }
+  }
+
+  const iterator = chunks();
+  const stream = new ReadableStream({
+    async pull(controller) {
+      try {
+        const next = await iterator.next();
+        if (next.done) controller.close();
+        else controller.enqueue(next.value);
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    async cancel() {
+      await iterator.return?.();
+      await reader.cancel().catch(() => {});
+    }
+  });
+
+  return { stream, audioSize, leadingTagBytes };
+}
+
+function makeMultipartPart(boundary, name, value) {
+  return new TextEncoder().encode(
+    "--" + boundary + "\r\n" +
+    'Content-Disposition: form-data; name="' + name + '"\r\n\r\n' +
+    String(value) + "\r\n"
+  );
+}
+
+async function sendAudioMultipartStream(e, chatId, title, artist, tag, audioStream, audioSize, coverBytes) {
+  const random = new Uint8Array(12);
+  crypto.getRandomValues(random);
+  const boundary = "----CercisMusic" +
+    Array.from(random, value => value.toString(16).padStart(2, "0")).join("");
+
+  const encoder = new TextEncoder();
+  const before = [
+    makeMultipartPart(boundary, "chat_id", chatId),
+    makeMultipartPart(boundary, "title", title),
+    makeMultipartPart(boundary, "performer", artist),
+    encoder.encode(
+      "--" + boundary + "\r\n" +
+      'Content-Disposition: form-data; name="audio"; filename="Cercis-edited.mp3"\r\n' +
+      "Content-Type: audio/mpeg\r\n\r\n"
+    ),
+    tag
+  ];
+  const after = [
+    encoder.encode(
+      "\r\n--" + boundary + "\r\n" +
+      'Content-Disposition: form-data; name="thumbnail"; filename="cover.jpg"\r\n' +
+      "Content-Type: image/jpeg\r\n\r\n"
+    ),
+    coverBytes,
+    encoder.encode("\r\n--" + boundary + "--\r\n")
+  ];
+  const totalLength =
+    before.reduce((sum, part) => sum + part.byteLength, 0) +
+    audioSize +
+    after.reduce((sum, part) => sum + part.byteLength, 0);
+
+  const fixed = new FixedLengthStream(totalLength);
+  const writer = fixed.writable.getWriter();
+
+  const producer = (async () => {
+    try {
+      for (const part of before) await writer.write(part);
+      const reader = audioStream.getReader();
+      while (true) {
+        const next = await reader.read();
+        if (next.done) break;
+        if (next.value?.length) await writer.write(next.value);
+      }
+      for (const part of after) await writer.write(part);
+      await writer.close();
+    } catch (error) {
+      await writer.abort(error).catch(() => {});
+      throw error;
+    }
+  })();
+
+  const responsePromise = fetch(
+    "https://api.telegram.org/bot" + e.BOT_TOKEN + "/sendAudio",
+    {
+      method: "POST",
+      headers: { "content-type": "multipart/form-data; boundary=" + boundary },
+      body: fixed.readable
+    }
+  );
+
+  const [response] = await Promise.all([responsePromise, producer]);
+  return response.json();
+}
+
 function isJpeg(bytes) {
   return bytes?.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
 }
@@ -287,31 +499,19 @@ async function processAudio(e, message, session, rawTitle) {
 
   await sendText(e, chatId, "⚙️ در حال اصلاح مشخصات فایل موسیقی…");
   try {
-    const [audioBytes, coverBytes] = await Promise.all([
-      downloadTelegramFile(e, session.audio_file_id, MAX_AUDIO_BYTES),
+    const [audioFile, coverBytes] = await Promise.all([
+      openTelegramFileStream(e, session.audio_file_id, MAX_AUDIO_BYTES),
       downloadTelegramFile(e, coverSetting.setting_value, MAX_COVER_BYTES)
     ]);
 
     if (!isJpeg(coverBytes)) throw new Error("COVER_NOT_JPEG");
-    const { start, end } = stripExistingId3(audioBytes);
+    const prepared = await prepareMp3Stream(audioFile.body, audioFile.size);
     const title = "~" + plainTitle + "~";
     const tag = makeId3Tag(title, ARTIST, coverBytes);
-    const audioBlob = new Blob(
-      [tag, audioBytes.subarray(start, end)],
-      { type: "audio/mpeg" }
+    const sent = await sendAudioMultipartStream(
+      e, chatId, title, ARTIST, tag, prepared.stream,
+      prepared.audioSize, coverBytes
     );
-
-    const form = new FormData();
-    form.append("chat_id", String(chatId));
-    form.append("title", title);
-    form.append("performer", ARTIST);
-    form.append("audio", audioBlob, "Cercis-edited.mp3");
-    form.append("thumbnail", new Blob([coverBytes], { type: "image/jpeg" }), "cover.jpg");
-
-    const sent = await fetch(
-      "https://api.telegram.org/bot" + e.BOT_TOKEN + "/sendAudio",
-      { method: "POST", body: form }
-    ).then(response => response.json());
 
     if (!sent?.ok) {
       console.error("[MUSIC_TAGGER_SEND_AUDIO]", JSON.stringify(sent));
