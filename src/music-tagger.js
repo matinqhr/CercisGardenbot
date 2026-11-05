@@ -104,10 +104,11 @@ function chooseCoverPhoto(photoSizes) {
   const candidates = withinTelegramLimit.length
     ? withinTelegramLimit
     : sizes.filter(x => Number(x.width || 0) > 0 && Number(x.height || 0) > 0);
-  candidates.sort((a, b) =>
-    (Number(b.width || 0) * Number(b.height || 0)) -
-    (Number(a.width || 0) * Number(a.height || 0))
-  );
+  candidates.sort((a, b) => {
+    const areaA = Number(a.width || 0) * Number(a.height || 0);
+    const areaB = Number(b.width || 0) * Number(b.height || 0);
+    return withinTelegramLimit.length ? areaB - areaA : areaA - areaB;
+  });
   return candidates[0] || null;
 }
 
