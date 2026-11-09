@@ -56,7 +56,7 @@ export function buildStartKeyboard(settings,libraryEnabled){
   if(libraryEnabled)rows.push([button("library","", {callback_data:"library_home",style:"primary"})]);
   rows.push([button("dossiers","",{callback_data:"public_list",style:"success"})]);
   rows.push([
-    button("about","",{url:"https://telegra.ph/Cercis-08-27"}),
+    button("about","",{callback_data:"about"}),
     button("guide","",{callback_data:"help"})
   ]);
   return {inline_keyboard:rows};
