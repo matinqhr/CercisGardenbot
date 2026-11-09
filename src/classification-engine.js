@@ -1,4 +1,4 @@
-import {getLibraryUISettings,libraryButton,styleLibraryButton,libraryTextPayload,richButtonRows} from "./library-ui-store.js";
+import {getLibraryUISettings,libraryButton,styleLibraryButton,libraryTextPayload,richButtonRows,richTextWithLineBreaks} from "./library-ui-store.js";
 const tg=async(e,m,b={})=>(await fetch("https://api.telegram.org/bot"+e.BOT_TOKEN+"/"+m,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)})).json();
 const out=x=>new Response(JSON.stringify(x),{status:200,headers:{"content-type":"application/json"}});
 const esc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
@@ -50,7 +50,7 @@ const renderLibraryPage=async(e,q,html,buttons)=>{
   if(sent?.ok){await tg(e,"deleteMessage",{chat_id:chatId,message_id:messageId});return out(sent);}
   return out(edited);
  }
- const rich={html:body+richButtonRows(normalizedButtons),is_rtl:true};
+ const rich={html:richTextWithLineBreaks(body)+richButtonRows(normalizedButtons),is_rtl:true};
  const edited=await tg(e,"editMessageText",{chat_id:chatId,message_id:messageId,rich_message:rich});
  if(edited?.ok||String(edited?.description||"").toLowerCase().includes("message is not modified"))return out(edited);
  const sent=await tg(e,"sendRichMessage",{chat_id:chatId,...rich});
