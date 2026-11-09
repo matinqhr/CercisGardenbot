@@ -55,8 +55,8 @@ export async function handleStartMenuMessage(e,m){
   await ensureStartMenuSettings(e);
   const session=await e.DB.prepare("SELECT field FROM bot_start_menu_sessions WHERE user_id=?").bind(m.from.id).first();
   if(!session?.field)return null;
-  const field=String(session.field),raw=String(m.text??m.caption??"").trim();
-  if(!raw)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ پیام متنی خالی است؛ لطفاً متن را بفرست."}));
+  const field=String(session.field),raw=String(m.text??m.caption??""),trimmed=raw.trim();
+  if(!trimmed)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ پیام متنی خالی است؛ لطفاً متن را بفرست."}));
   if(trimmed==="/reset"){
     if(field==="text")await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=NULL,start_entities='[]',updated_at=CURRENT_TIMESTAMP WHERE id=1").run();
     else await e.DB.prepare("UPDATE bot_start_menu_settings SET "+field+"_text=?, "+field+"_icon_custom_emoji_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1").bind(({library:"📚 کتابخانه Home",dossiers:"📜 فهرست پرونده‌های ثبت‌شده",about:"ℹ️ درباره ربات",guide:"📖 راهنما"})[field]).run();
