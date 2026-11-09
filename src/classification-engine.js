@@ -74,7 +74,7 @@ const children=async(e,parent,mode="cercis",seed=1)=>{
   const r=parent==null?await e.DB.prepare(sql).all():await e.DB.prepare(sql).bind(parent).all();return r.results||[];
  }
  if(mode==="random"){
-  const sql=parent==null?"SELECT * FROM classification_categories WHERE parent_id IS NULL ORDER BY ((id*1103515245+?)%2147483647),id":"SELECT * FROM classification_categories WHERE parent_id=? ORDER BY ((id*1103515245+?)%2147483647),id";
+  const sql=parent==null?"SELECT * FROM classification_categories WHERE parent_id IS NULL ORDER BY ((id*((1103515245+((?%2147483646)*40699))%2147483647))%2147483647),id":"SELECT * FROM classification_categories WHERE parent_id=? ORDER BY ((id*1103515245+?)%2147483647),id";
   const r=parent==null?await e.DB.prepare(sql).bind(Number(seed)||1).all():await e.DB.prepare(sql).bind(parent,Number(seed)||1).all();return r.results||[];
  }
  const order=mode==="alphabetical"?"name COLLATE NOCASE ASC,sort_order ASC,id ASC":"sort_order ASC,id ASC";
@@ -172,7 +172,7 @@ const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
  const pref=await e.DB.prepare("SELECT sort_mode,random_seed FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();
  const mode=String(pref?.sort_mode||"cercis"),seed=Number(pref?.random_seed)||1;
  const allSub=await children(e,cid,mode,seed),subLimit=15,subOffset=Math.max(0,Number(subPage)||0)*subLimit,sub=allSub.slice(subOffset,subOffset+subLimit),subHasNext=allSub.length>subOffset+subLimit,limit=20,offset=Math.max(0,Number(page)||0)*limit;
- const order=mode==="random"?"((p.message_id * 1103515245 + ? + ? * 1013904223) % 2147483647) ASC":"p.message_id DESC";
+ const order=mode==="random"?"((p.message_id * ((1103515245 + ((? % 2147483646) * 40699)) % 2147483647)) % 2147483647) ASC, p.message_id ASC":"p.message_id DESC";
  const sql="SELECT DISTINCT p.message_id,p.url,p.title,p.title_emoji,p.title_emoji_id FROM home_archive_posts p JOIN home_post_paths pp ON pp.post_id=p.message_id JOIN home_post_path_nodes pn ON pn.path_id=pp.id WHERE pn.category_id=? AND COALESCE(p.status,'pending')!='deleted' AND NOT EXISTS (SELECT 1 FROM home_post_path_nodes next WHERE next.path_id=pn.path_id AND next.level>pn.level) ORDER BY "+order+" LIMIT ? OFFSET ?";
  const rows=(mode==="random"
   ?(await e.DB.prepare(sql).bind(cid,seed,cid,limit+1,offset).all()).results||[]
