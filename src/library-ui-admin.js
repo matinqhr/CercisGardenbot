@@ -20,7 +20,8 @@ async function openSettings(e,q){
  const rows=[
   [{text:"✏️ متن صفحهٔ اصلی کتابخانه",callback_data:"libraryui_edit:hub_text",style:"primary"}],
   [{text:"✏️ متن فهرست شاخه‌ها",callback_data:"libraryui_edit:tree_text"}],
-  [{text:"🔤 تغییر عنوان دکمه‌ها",callback_data:"libraryui_labels"}],\n  [{text:"✏️ نام دکمهٔ تغییر ظاهر کتابخانه",callback_data:"libraryui_edit:appearance"}],
+  [{text:"🔤 تغییر عنوان دکمه‌ها",callback_data:"libraryui_labels"}],
+  [{text:"✏️ نام دکمهٔ تغییر ظاهر کتابخانه",callback_data:"libraryui_edit:appearance"}],
   [{text:"🎨 رنگ‌بندی دکمه‌ها",callback_data:"libraryui_styles"}],
   [{text:"👁 پیش‌نمایش کتابخانه",callback_data:"libraryui_preview",style:"success"}],
   [{text:"♻️ بازنشانی ظاهر کتابخانه",callback_data:"libraryui_reset",style:"danger"}],
