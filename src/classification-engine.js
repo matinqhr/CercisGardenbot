@@ -226,7 +226,7 @@ const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
  const pref=await e.DB.prepare("SELECT sort_mode,random_seed FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();
  const mode=String(pref?.sort_mode||"cercis"),seed=Number(pref?.random_seed)||1;
  const allSub=await children(e,cid,mode,seed),subLimit=15,subOffset=Math.max(0,Number(subPage)||0)*subLimit,sub=allSub.slice(subOffset,subOffset+subLimit),subHasNext=allSub.length>subOffset+subLimit,limit=20,offset=Math.max(0,Number(page)||0)*limit;
- const order=mode==="random"?"((p.message_id * ((1103515245 + ((? % 2147483646) * 40699)) % 2147483647)) % 2147483647) ASC, p.message_id ASC":"p.message_id DESC";
+ const order=mode==="random"?"((p.message_id * ((1103515245 + ((? % 2147483646) * 40699)) % 2147483647)) % 2147483647) ASC, p.message_id ASC":mode==="oldest"?"p.message_id ASC":"p.message_id DESC";
  const sql="SELECT DISTINCT p.message_id,p.url,p.title,p.title_emoji,p.title_emoji_id FROM home_archive_posts p JOIN home_post_paths pp ON pp.post_id=p.message_id JOIN home_post_path_nodes pn ON pn.path_id=pp.id WHERE pn.category_id=? AND COALESCE(p.status,'pending')!='deleted' AND NOT EXISTS (SELECT 1 FROM home_post_path_nodes next WHERE next.path_id=pn.path_id AND next.level>pn.level) ORDER BY "+order+" LIMIT ? OFFSET ?";
  const rows=(mode==="random"
   ?(await e.DB.prepare(sql).bind(cid,seed,cid,limit+1,offset).all()).results||[]
@@ -276,6 +276,8 @@ const sortMenu=async(e,q,parent,returnTo="category")=>{
   [option("cercis","ترتیب سرسیس")],
   [option("alphabetical","الفبایی")],
   [option("count","بر اساس تعداد")],
+  [option("oldest","قدیمی‌ترین پست‌ها")],
+  [option("newest","جدیدترین پست‌ها")],
   [option("random","ترتیب تصادفی")]
  ];
  if(current==="random")rows.push([libraryButton(ui,"add_favorites",{text:"🔀 ساخت چینش تصادفی تازه",callback_data:"home_sort_shuffle:"+target+":"+returnTo})]);
@@ -368,7 +370,7 @@ export default{async fetch(req,e){
   }
   if(d.startsWith("home_sort_set:")){
    const [,mode,targetRaw,returnTo]=d.split(":"),target=Number(targetRaw)||0;
-   if(!["cercis","alphabetical","count","random"].includes(mode))return out({ok:true});
+   if(!["cercis","alphabetical","count","oldest","newest","random"].includes(mode))return out({ok:true});
    const old=await e.DB.prepare("SELECT random_seed FROM user_library_preferences WHERE user_id=?").bind(id).first();
    const seed=mode==="random"?(Math.floor(Math.random()*2147483000)+1):(Number(old?.random_seed)||1);
    await e.DB.prepare("INSERT INTO user_library_preferences(user_id,sort_mode,random_seed,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET sort_mode=excluded.sort_mode,random_seed=excluded.random_seed,updated_at=CURRENT_TIMESTAMP").bind(id,mode,seed).run();
