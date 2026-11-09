@@ -9,7 +9,7 @@ const admin=(e,id)=>String(e.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Bo
 const HOME="Arghavanplaylistt";
 const withRichButtons=(rich,rows)=>{
  const html=richButtonRows(rows);
- if(typeof rich.html==="string")rich.html+=html;
+ if(typeof rich.html==="string")rich.html+="\\n"+html;
  else if(typeof rich.markdown==="string")rich.markdown+="\n\n"+html;
  else rich.html=html;
  rich.is_rtl=true;
