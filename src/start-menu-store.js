@@ -87,16 +87,7 @@ export function buildStartKeyboard(settings,libraryEnabled){
 
 function normalizeRichInput(raw){
   const value=String(raw||"").trim();
-  if(!value)return {html:defaultStartText(),is_rtl:true};
-  try{
-    const parsed=JSON.parse(value);
-    if(parsed&&typeof parsed==="object"&&!Array.isArray(parsed)){
-      if(typeof parsed.html==="string")return {...parsed,is_rtl:true};
-      if(typeof parsed.markdown==="string")return {...parsed,is_rtl:true};
-      if(Array.isArray(parsed.blocks))return {...parsed,is_rtl:true};
-    }
-  }catch{}
-  return {html:value,is_rtl:true};
+  return {html:value||defaultStartText(),is_rtl:true};
 }
 
 export async function buildStartPayload(e,userId){
