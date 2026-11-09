@@ -1,12 +1,20 @@
-import {getLibraryUISettings,libraryButton,styleLibraryButton,libraryTextPayload} from "./library-ui-store.js";
+import {getLibraryUISettings,libraryButton,styleLibraryButton,libraryTextPayload,richButtonRows} from "./library-ui-store.js";
 const tg=async(e,m,b={})=>(await fetch("https://api.telegram.org/bot"+e.BOT_TOKEN+"/"+m,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)})).json();
 const out=x=>new Response(JSON.stringify(x),{status:200,headers:{"content-type":"application/json"}});
 const esc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
 const customEmoji=m=>{const raw=String(m?.text??m?.caption??"");const es=[...(Array.isArray(m?.entities)?m.entities:[]),...(Array.isArray(m?.caption_entities)?m.caption_entities:[])];const x=es.find(z=>z?.type==="custom_emoji"&&z?.custom_emoji_id);if(!x)return{emoji:null,emoji_id:null,name:raw.trim()};const start=Math.max(0,Number(x.offset)||0),end=Math.max(start,start+(Number(x.length)||0));const glyph=raw.slice(start,end);const name=(raw.slice(0,start)+raw.slice(end)).trim();return{emoji:glyph||null,emoji_id:String(x.custom_emoji_id),name}};
 const catHtml=(name,emojiId,emoji)=>{if(!emojiId)return esc(name);const s=String(name||"");const lead=String(emoji||"");const rest=lead&&s.startsWith(lead)?s.slice(lead.length):s;return '<tg-emoji emoji-id="'+esc(emojiId)+'">'+esc(lead||"🌿")+'</tg-emoji>'+esc(rest)};
-const categoryButton=(c,prefix="",suffix="")=>{const name=String(c?.name||"");const emoji=String(c?.emoji||"");const label=c?.emoji_id&&emoji&&name.startsWith(emoji)?name.slice(emoji.length).trimStart():name;return{text:prefix+(c?.emoji_id?label:name)+suffix,...(c?.emoji_id?{icon_custom_emoji_id:String(c.emoji_id)}:{})}};
+const categoryButton=(c,prefix="",suffix="")=>{const name=String(c?.name||"");const emoji=String(c?.emoji||"");const label=c?.emoji_id&&emoji&&name.startsWith(emoji)?name.slice(emoji.length).trimStart():name;return{text:prefix+(c?.emoji_id?label:name)+suffix,...(c?.emoji_id?{icon_custom_emoji_id:String(c.emoji_id),rich_custom_emoji_alt:emoji||"🌿"}:{})}};
 const admin=(e,id)=>String(e.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean).includes(String(id));
 const HOME="Arghavanplaylistt";
+const withRichButtons=(rich,rows)=>{
+ const html=richButtonRows(rows);
+ if(typeof rich.html==="string")rich.html+=html;
+ else if(typeof rich.markdown==="string")rich.markdown+="\n\n"+html;
+ else rich.html=html;
+ rich.is_rtl=true;
+ return rich;
+};
 
 let schemaReady=false;
 let schemaPromise=null;
@@ -146,14 +154,14 @@ const libraryHome=async(e,q)=>{
  const s=await setting(e);
  if(!Number(s.library_enabled))return out({ok:true});
  const ui=await getLibraryUISettings(e);
- const text=libraryTextPayload(ui,"hub_text");
- const keyboard={inline_keyboard:[
+ const buttons=[
   [libraryButton(ui,"browse",{callback_data:"home_categories"})],
   [libraryButton(ui,"hub_sort",{callback_data:"home_sort_home"})],
   [libraryButton(ui,"search",{switch_inline_query_current_chat:""}),libraryButton(ui,"favorites",{callback_data:"favorites:0"})],
   [libraryButton(ui,"hub_back",{callback_data:"public_start"})]
- ]};
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,...text,reply_markup:keyboard}));
+ ];
+ const rich=withRichButtons(libraryTextPayload(ui,"hub_text").rich_message,buttons);
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,rich_message:rich}));
 };
 
 const publicTree=async(e,q)=>{
@@ -166,7 +174,8 @@ const publicTree=async(e,q)=>{
  if(!buttons.length)buttons.push([{text:String(ui.no_categories_text||"هنوز شاخه‌ای ثبت نشده است"),callback_data:"home_categories"}]);
  buttons.push([libraryButton(ui,"tree_sort",{text:String(ui.category_sort_text||"⚙️ نحوه نمایش"),callback_data:"home_sort"})]);
  buttons.push([libraryButton(ui,"tree_back",{callback_data:"library_home"})]);
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,...libraryTextPayload(ui,"tree_text"),reply_markup:{inline_keyboard:buttons}}));
+ const rich=withRichButtons(libraryTextPayload(ui,"tree_text").rich_message,buttons);
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,rich_message:rich}));
 };
 
 const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
@@ -200,7 +209,7 @@ const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
  buttons.push(...posts.map(x=>{
   const title=(String(x.title||"").trim()||("📌 پست #"+x.message_id))+x.mark;
   if(selecting)return [styleLibraryButton(ui,selected.has(Number(x.message_id))?"success":"category",{text:(selected.has(Number(x.message_id))?"✅ ":"▫️ ")+title.slice(0,60),callback_data:"fav_toggle:"+cid+":"+page+":"+subPage+":"+x.message_id})];
-  return [styleLibraryButton(ui,"post",{text:title.slice(0,64),url:x.url,...(x.title_emoji_id?{icon_custom_emoji_id:String(x.title_emoji_id)}:{})})];
+  return [styleLibraryButton(ui,"post",{text:title.slice(0,64),url:x.url,...(x.title_emoji_id?{icon_custom_emoji_id:String(x.title_emoji_id),rich_custom_emoji_alt:String(x.title_emoji||"🌕")}:{})})];
  }));
  const nav=[];if(page>0)nav.push(libraryButton(ui,"previous",{callback_data:"home_cat_page:"+cid+":"+(page-1)+":"+subPage}));if(hasNext)nav.push(libraryButton(ui,"next",{callback_data:"home_cat_page:"+cid+":"+(page+1)+":"+subPage}));if(nav.length)buttons.push(nav);
  buttons.push([libraryButton(ui,"category_sort",{callback_data:"home_sort:"+cid})]);
@@ -218,7 +227,7 @@ const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
   return '• <a href="'+esc(x.url)+'">'+icon+esc(title)+'</a>'+esc(x.mark);
  }).join("\n");
  const body="🗂 <b>"+esc(c.name)+"</b>\n\n"+(selecting?"حالت انتخاب فعال است؛ پست‌های موردنظر را انتخاب کن.\n\n":"")+(allSub.length?"شاخه‌ها و پست‌های مستقیم این بخش:":"پست‌های مستقیم این بخش:")+(linkedTitles?"\n\n"+linkedTitles:"\n\nدر این صفحه پستی ثبت نشده است.");
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:body,parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,rich_message:{html:body+richButtonRows(buttons),is_rtl:true}}));
 };
 
 const sortMenu=async(e,q,parent,returnTo="category")=>{
@@ -237,7 +246,7 @@ const sortMenu=async(e,q,parent,returnTo="category")=>{
  if(current==="random")rows.push([libraryButton(ui,"add_favorites",{text:"🔀 ساخت چینش تصادفی تازه",callback_data:"home_sort_shuffle:"+target+":"+returnTo})]);
  const backKey=returnTo==="hub"?"hub_back":target?"category_back":"tree_back";
  rows.push([libraryButton(ui,backKey,{callback_data:returnTo==="hub"?"library_home":target?"home_cat:"+target:"home_categories"})]);
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"⚙️ <b>نحوه نمایش</b>\\n\\nترتیب دلخواه را انتخاب کن:\\n\\nترتیب تصادفی برای هر کاربر پایدار می‌ماند تا زمانی که چینش تازه ساخته شود.",parse_mode:"HTML",reply_markup:{inline_keyboard:rows}}));
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,rich_message:{html:"⚙️ <b>نحوه نمایش</b>\\n\\nترتیب دلخواه را انتخاب کن:\\n\\nترتیب تصادفی برای هر کاربر پایدار می‌ماند تا زمانی که چینش تازه ساخته شود."+richButtonRows(rows),is_rtl:true}}));
 };
 
 const favoritesPage=async(e,q,page=0)=>{
@@ -250,7 +259,7 @@ const favoritesPage=async(e,q,page=0)=>{
  for(const r of rows){
   const label=String(r.title||("پست #"+r.post_id)).trim().slice(0,56);
   buttons.push([
-   {text:label,url:String(r.url||("https://t.me/"+HOME+"/"+r.post_id)),...(r.title_emoji_id?{icon_custom_emoji_id:String(r.title_emoji_id)}:{})},
+   {text:label,url:String(r.url||("https://t.me/"+HOME+"/"+r.post_id)),...(r.title_emoji_id?{icon_custom_emoji_id:String(r.title_emoji_id),rich_custom_emoji_alt:String(r.title_emoji||"🌕")}:{})},
    libraryButton(ui,"remove_favorite",{callback_data:"fav_remove:"+r.post_id+":"+safePage})
   ]);
  }
@@ -262,7 +271,7 @@ const favoritesPage=async(e,q,page=0)=>{
   return (safePage*size+i+1)+". "+icon+'<a href="'+esc(r.url||("https://t.me/"+HOME+"/"+r.post_id))+'">'+esc(title)+'</a>';
  });
  const text="❤️ <b>فهرست پست‌های پسندیده‌شده</b>\n\n"+(totalItems?"پست‌هایی که ذخیره کرده‌ای:\n\n"+lines.join("\n"):"هنوز پستی به فهرست علاقه‌مندی‌ها اضافه نکرده‌ای.")+"\n\n<i>صفحه "+(safePage+1)+" از "+pages+" · تعداد: "+totalItems+"</i>";
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text,parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,rich_message:{html:text+richButtonRows(buttons),is_rtl:true}}));
 };
 
 const favoriteBegin=async(e,q,cid,page,subPage)=>{
