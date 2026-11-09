@@ -4,7 +4,7 @@ const tg=async(e,m,b={})=>(await fetch(`https://api.telegram.org/bot${e.BOT_TOKE
 const out=x=>new Response(JSON.stringify(x??{ok:true}),{status:200,headers:{"content-type":"application/json"}});
 const admin=(e,id)=>String(e.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean).includes(String(id));
 const esc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
-const LABELS={library:"دکمهٔ کتابخانه Home",dossiers:"دکمهٔ فهرست پرونده‌ها",about:"دکمهٔ دربارهٔ ربات",guide:"دکمهٔ راهنما"};
+const LABELS={library:"دکمهٔ کتابخانه 𝐇𝐨𝐦𝐞",dossiers:"دکمهٔ فهرست پرونده‌ها",about:"دکمهٔ دربارهٔ ربات",guide:"دکمهٔ راهنما"};
 const MAX_BUTTON_CHARS=64;
 
 async function openSettings(e,q){
@@ -61,7 +61,7 @@ export async function handleStartMenuMessage(e,m){
     if(field==="text"){
       await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=NULL,start_entities='[]',start_source_chat_id=NULL,start_source_message_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1").run();
     }else{
-      await e.DB.prepare("UPDATE bot_start_menu_settings SET "+field+"_text=?, "+field+"_icon_custom_emoji_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1").bind(({library:"📚 کتابخانه Home",dossiers:"📜 فهرست پرونده‌های ثبت‌شده",about:"ℹ️ درباره ربات",guide:"📖 راهنما"})[field]).run();
+      await e.DB.prepare("UPDATE bot_start_menu_settings SET "+field+"_text=?, "+field+"_icon_custom_emoji_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1").bind(({library:"📚 کتابخانه 𝐇𝐨𝐦𝐞",dossiers:"📜 فهرست پرونده‌های ثبت‌شده",about:"ℹ️ درباره ربات",guide:"📖 راهنما"})[field]).run();
     }
     await e.DB.prepare("DELETE FROM bot_start_menu_sessions WHERE user_id=?").bind(m.from.id).run();
     return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"♻️ مقدار به حالت پیش‌فرض برگشت.",reply_markup:{inline_keyboard:[[{text:"🎛 بازگشت به تنظیمات منو",callback_data:"startmenu_open"}]]}}));
@@ -101,7 +101,7 @@ export default {async fetch(req,e){
     return out(result);
   }
   if(d==="startmenu_reset"){
-    await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=NULL,start_entities='[]',start_source_chat_id=NULL,start_source_message_id=NULL,library_text='📚 کتابخانه Home',library_icon_custom_emoji_id=NULL,dossiers_text='📜 فهرست پرونده‌های ثبت‌شده',dossiers_icon_custom_emoji_id=NULL,about_text='ℹ️ درباره ربات',about_icon_custom_emoji_id=NULL,guide_text='📖 راهنما',guide_icon_custom_emoji_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1").run();
+    await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=NULL,start_entities='[]',start_source_chat_id=NULL,start_source_message_id=NULL,library_text='📚 کتابخانه 𝐇𝐨𝐦𝐞',library_icon_custom_emoji_id=NULL,dossiers_text='📜 فهرست پرونده‌های ثبت‌شده',dossiers_icon_custom_emoji_id=NULL,about_text='ℹ️ درباره ربات',about_icon_custom_emoji_id=NULL,guide_text='📖 راهنما',guide_icon_custom_emoji_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1").run();
     return openSettings(e,q);
   }
   return out({ok:true});

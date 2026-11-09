@@ -1,7 +1,7 @@
 const tg=async(e,m,b={})=>(await fetch("https://api.telegram.org/bot"+e.BOT_TOKEN+"/"+m,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)})).json();
 
 const DEFAULTS={
-  library_text:"📚 کتابخانه Home",
+  library_text:"📚 کتابخانه 𝐇𝐨𝐦𝐞",
   dossiers_text:"📜 فهرست پرونده‌های ثبت‌شده",
   about_text:"ℹ️ درباره ربات",
   guide_text:"📖 راهنما"
@@ -18,7 +18,7 @@ export async function ensureStartMenuSettings(e){
         start_entities TEXT NOT NULL DEFAULT '[]',
         start_source_chat_id INTEGER,
         start_source_message_id INTEGER,
-        library_text TEXT NOT NULL DEFAULT '📚 کتابخانه Home',
+        library_text TEXT NOT NULL DEFAULT '📚 کتابخانه 𝐇𝐨𝐦𝐞',
         library_icon_custom_emoji_id TEXT,
         dossiers_text TEXT NOT NULL DEFAULT '📜 فهرست پرونده‌های ثبت‌شده',
         dossiers_icon_custom_emoji_id TEXT,
@@ -59,7 +59,7 @@ export function defaultStartText(){
   return `<h1>🌿 به سرسیس خوش آمدید.</h1>
 <p><b>CERCIS GARDEN — ARCHIVE SYSTEM</b></p>
 <blockquote>هر پست، نشانی از چیزی‌ست که نباید در میان انبوه محتوا گم شود.</blockquote>
-<p>سرسیس فضایی برای نگهداری، پردازش و بازیابی محتوای آرشیوشده از <a href="https://t.me/Arghavanplaylistt">Home</a> است؛ مجموعه‌ای از موسیقی‌ها، نوشته‌ها، تصاویر، ویدیوها و یادداشت‌ها که هرکدام می‌توانند بیش از یک نشانی ساده باشند.</p>
+<p>سرسیس فضایی برای نگهداری، پردازش و بازیابی محتوای آرشیوشده از <a href="https://t.me/Arghavanplaylistt">𝐇𝐨𝐦𝐞</a> است؛ مجموعه‌ای از موسیقی‌ها، نوشته‌ها، تصاویر، ویدیوها و یادداشت‌ها که هرکدام می‌توانند بیش از یک نشانی ساده باشند.</p>
 <h2>📁 <mark>پرونده‌های ثبت‌شده</mark></h2>
 <p>اینجا جایی‌ست که به‌صورت تخصصی و مفصل روی پست‌ها کار می‌کنیم؛ اطلاعات هر پست را ثبت و تکمیل می‌کنیم، جزئیات مربوط به آن را کنار هم می‌گذاریم و برای هرکدام پرونده‌ای مستقل می‌سازیم. هر پرونده تلاشی‌ست برای اینکه چیزی فراتر از خودِ پست باقی بماند.</p>
 <h2>🌱 <mark>کتابخانه</mark></h2>
@@ -72,7 +72,7 @@ export function defaultStartText(){
 
 function startButton(settings,field,callback,libraryEnabled){
   if(field==="library"&&!libraryEnabled)return null;
-  const label=String(settings?.[field+"_text"]||DEFAULTS[field+"_text"]).trim();
+  const label=String(settings?.[field+"_text"]||DEFAULTS[field+"_text"]).trim().replace(/\bHome\b/g,"𝐇𝐨𝐦𝐞");
   const icon=settings?.[field+"_icon_custom_emoji_id"];
   const style=BUTTON_STYLES[field];
   return {
