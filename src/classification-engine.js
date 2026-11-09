@@ -213,7 +213,78 @@ const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
  return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:body,parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
 };
 
-const sortMenu=async(e,q,parent)=>{const s=await setting(e);if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));const target=Number(parent)||0;const pref=await e.DB.prepare("SELECT sort_mode FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first(),current=String(pref?.sort_mode||"cercis"),cb=m=>"home_sort_set:"+m+":"+target;return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"⚙️ <b>نحوه نمایش</b>\n\nترتیب فعلی را انتخاب کن:",parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:current==="cercis"?"🟢 ترتیب سرسیس":"⚪ ترتیب سرسیس",callback_data:cb("cercis")}],[{text:current==="alphabetical"?"🟢 الفبایی":"⚪ الفبایی",callback_data:cb("alphabetical")}],[{text:current==="count"?"🟢 بر اساس تعداد":"⚪ بر اساس تعداد",callback_data:cb("count")}],[{text:"🔙 بازگشت",callback_data:target?"home_cat:"+target:"home_categories"}]]}}))};
+const sortMenu=async(e,q,parent,returnTo="category")=>{
+ const s=await setting(e);if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));
+ const target=Number(parent)||0;
+ const pref=await e.DB.prepare("SELECT sort_mode FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();
+ const current=String(pref?.sort_mode||"cercis"),cb=m=>"home_sort_set:"+m+":"+target+":"+returnTo;
+ const rows=[
+  [{text:current==="cercis"?"🟢 ترتیب سرسیس":"⚪ ترتیب سرسیس",callback_data:cb("cercis")}],
+  [{text:current==="alphabetical"?"🟢 الفبایی":"⚪ الفبایی",callback_data:cb("alphabetical")}],
+  [{text:current==="count"?"🟢 بر اساس تعداد":"⚪ بر اساس تعداد",callback_data:cb("count")}],
+  [{text:current==="random"?"🟢 ترتیب تصادفی":"⚪ ترتیب تصادفی",callback_data:cb("random")}]
+ ];
+ if(current==="random")rows.push([{text:"🔀 ساخت چینش تصادفی تازه",callback_data:"home_sort_shuffle:"+target+":"+returnTo,style:"success"}]);
+ rows.push([{text:"🔙 بازگشت",callback_data:returnTo==="hub"?"library_home":target?"home_cat:"+target:"home_categories"}]);
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"⚙️ <b>نحوه نمایش</b>\n\nترتیب دلخواه را انتخاب کن:\n\nترتیب تصادفی برای هر کاربر پایدار می‌ماند تا زمانی که چینش تازه ساخته شود.",parse_mode:"HTML",reply_markup:{inline_keyboard:rows}}));
+};
+
+const favoritesPage=async(e,q,page=0)=>{
+ const userId=Number(q.from?.id),size=15;
+ const totalRow=await e.DB.prepare("SELECT COUNT(*) n FROM user_library_favorites f JOIN home_archive_posts p ON p.message_id=f.post_id WHERE f.user_id=? AND COALESCE(p.status,'pending')!='deleted'").bind(userId).first();
+ const totalItems=Number(totalRow?.n||0),pages=Math.max(1,Math.ceil(totalItems/size)),safePage=Math.max(0,Math.min(pages-1,Number(page)||0));
+ const rows=(await e.DB.prepare("SELECT f.post_id,p.url,p.title,p.title_emoji,p.title_emoji_id FROM user_library_favorites f JOIN home_archive_posts p ON p.message_id=f.post_id WHERE f.user_id=? AND COALESCE(p.status,'pending')!='deleted' ORDER BY f.created_at DESC,f.post_id DESC LIMIT ? OFFSET ?").bind(userId,size,safePage*size).all()).results||[];
+ const buttons=[];
+ for(const r of rows){
+  const label=String(r.title||("پست #"+r.post_id)).trim().slice(0,56);
+  buttons.push([
+   {text:label,url:String(r.url||("https://t.me/"+HOME+"/"+r.post_id)),...(r.title_emoji_id?{icon_custom_emoji_id:String(r.title_emoji_id)}:{})},
+   {text:"✖️",callback_data:"fav_remove:"+r.post_id+":"+safePage,style:"danger"}
+  ]);
+ }
+ const nav=[];if(safePage>0)nav.push({text:"‹ پست‌های جدیدتر",callback_data:"favorites:"+(safePage-1)});if(safePage+1<pages)nav.push({text:"پست‌های قدیمی‌تر ›",callback_data:"favorites:"+(safePage+1)});if(nav.length)buttons.push(nav);
+ buttons.push([{text:"🔙 بازگشت به کتابخانه",callback_data:"library_home"}]);
+ const lines=rows.map((r,i)=>{
+  const title=String(r.title||("پست #"+r.post_id));
+  const icon=r.title_emoji_id?'<tg-emoji emoji-id="'+esc(r.title_emoji_id)+'">'+esc(r.title_emoji||"🌕")+"</tg-emoji>":"";
+  return (safePage*size+i+1)+". "+icon+'<a href="'+esc(r.url||("https://t.me/"+HOME+"/"+r.post_id))+'">'+esc(title)+'</a>';
+ });
+ const text="❤️ <b>فهرست پست‌های پسندیده‌شده</b>\n\n"+(totalItems?"پست‌هایی که ذخیره کرده‌ای:\n\n"+lines.join("\n"):"هنوز پستی به فهرست علاقه‌مندی‌ها اضافه نکرده‌ای.")+"\n\n<i>صفحه "+(safePage+1)+" از "+pages+" · تعداد: "+totalItems+"</i>";
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text,parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
+};
+
+const favoriteBegin=async(e,q,cid,page,subPage)=>{
+ await e.DB.prepare("INSERT INTO user_library_selection_sessions(user_id,created_at,updated_at) VALUES(?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET updated_at=CURRENT_TIMESTAMP").bind(q.from.id).run();
+ await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).run();
+ return publicCategory(e,q,cid,page,subPage);
+};
+const favoriteToggle=async(e,q,cid,page,subPage,postId)=>{
+ const active=await e.DB.prepare("SELECT 1 present FROM user_library_selection_sessions WHERE user_id=?").bind(q.from.id).first();
+ if(!active)return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"حالت انتخاب فعال نیست.",show_alert:true}));
+ const valid=await e.DB.prepare("SELECT 1 present FROM home_archive_posts p JOIN home_post_paths pp ON pp.post_id=p.message_id JOIN home_post_path_nodes pn ON pn.path_id=pp.id WHERE p.message_id=? AND pn.category_id=? AND COALESCE(p.status,'pending')!='deleted' AND NOT EXISTS (SELECT 1 FROM home_post_path_nodes next WHERE next.path_id=pn.path_id AND next.level>pn.level) LIMIT 1").bind(postId,cid).first();
+ if(!valid)return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"این پست در این فهرست در دسترس نیست.",show_alert:true}));
+ const exists=await e.DB.prepare("SELECT 1 present FROM user_library_selection_items WHERE user_id=? AND post_id=?").bind(q.from.id,postId).first();
+ if(exists)await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=? AND post_id=?").bind(q.from.id,postId).run();
+ else await e.DB.prepare("INSERT OR IGNORE INTO user_library_selection_items(user_id,post_id) VALUES(?,?)").bind(q.from.id,postId).run();
+ return publicCategory(e,q,cid,page,subPage);
+};
+const favoriteSave=async(e,q,cid,page,subPage)=>{
+ const count=await e.DB.prepare("SELECT COUNT(*) n FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).first();
+ if(!Number(count?.n||0))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"هنوز پستی انتخاب نشده است.",show_alert:true}));
+ await e.DB.prepare("INSERT OR IGNORE INTO user_library_favorites(user_id,post_id) SELECT user_id,post_id FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).run();
+ await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).run();
+ await e.DB.prepare("DELETE FROM user_library_selection_sessions WHERE user_id=?").bind(q.from.id).run();
+ await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:Number(count.n)+" پست به علاقه‌مندی‌ها اضافه شد."});
+ return publicCategory(e,q,cid,page,subPage);
+};
+const favoriteCancel=async(e,q,cid,page,subPage)=>{
+ await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).run();
+ await e.DB.prepare("DELETE FROM user_library_selection_sessions WHERE user_id=?").bind(q.from.id).run();
+ await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"انتخاب لغو شد."});
+ return publicCategory(e,q,cid,page,subPage);
+};
+
+
 
 export default{async fetch(req,e){
  let u;try{u=await req.clone().json()}catch{return out({ok:true})}
