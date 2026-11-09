@@ -28,7 +28,7 @@ async function openSettings(e,q){
   [{text:"🔙 بازگشت به پنل مدیریت",callback_data:"panel"}]
  ];
  const text="🎨 <b>شخصی‌سازی کتابخانه</b>\n\n"+
-  "متن صفحهٔ اصلی و فهرست شاخه‌ها را با Rich HTML تلگرام ویرایش کن؛ نمونهٔ هایلایت: &lt;mark&gt;متن&lt;/mark&gt;، لینک روی متن: &lt;a href=&quot;https://example.com&quot;&gt;Home&lt;/a&gt;، تیتر، نقل‌قول و بخش‌های بازشونده هم پشتیبانی می‌شوند. دکمه‌ها داخل خود Rich Message قرار می‌گیرند.\n\n"+
+  "متن صفحهٔ اصلی و فهرست شاخه‌ها را با Rich HTML تلگرام ویرایش کن؛ نمونهٔ هایلایت: &lt;mark&gt;متن&lt;/mark&gt;، لینک روی متن: &lt;a href=&quot;https://example.com&quot;&gt;Home&lt;/a&gt;، تیتر، نقل‌قول و بخش‌های بازشونده هم پشتیبانی می‌شوند. شکست‌خط‌های معمولی (Enter) هم خودکار حفظ می‌شوند. دکمه‌ها داخل خود Rich Message قرار می‌گیرند.\n\n"+
   "<b>متن‌ها:</b>\n"+
   "صفحهٔ اصلی: "+(String(s.hub_text||"").trim()?"شخصی‌سازی‌شده":"پیش‌فرض")+"\n"+
   "فهرست شاخه‌ها: "+(String(s.tree_text||"").trim()?"شخصی‌سازی‌شده":"پیش‌فرض")+"\n\n"+
@@ -62,7 +62,7 @@ async function beginEdit(e,q,field){
  await e.DB.prepare("INSERT INTO bot_library_ui_sessions(user_id,field,created_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET field=excluded.field,created_at=CURRENT_TIMESTAMP").bind(q.from.id,field).run();
  const rich=field==="hub_text"||field==="tree_text";
  const hint=rich
-  ?"کد Rich HTML را به‌صورت متن بفرست. نمونه: <mark>متن هایلایت‌شده</mark>، <a href='URL'>لینک روی واژه</a>، <h2>تیتر</h2>، <blockquote>نقل‌قول</blockquote> و <details><summary>بیشتر</summary>متن پنهان</details>. دکمه‌های کتابخانه خودکار زیر محتوا قرار می‌گیرند. برای بازگشت به پیش‌فرض /reset بفرست."
+  ?"کد Rich HTML را به‌صورت متن بفرست. نمونه: <mark>متن هایلایت‌شده</mark>، <a href='URL'>لینک روی واژه</a>، <h2>تیتر</h2>، <blockquote>نقل‌قول</blockquote> و <details><summary>بیشتر</summary>متن پنهان</details>. شکست‌خط‌هایی که با Enter می‌گذاری هم خودکار حفظ می‌شوند و نیازی به نوشتن <br> برای هر خط نیست. دکمه‌های کتابخانه خودکار زیر محتوا قرار می‌گیرند. برای بازگشت به پیش‌فرض /reset بفرست."
   :"عنوان تازهٔ "+(LABEL_NAMES[field]||"دکمه")+" را بفرست. حداکثر ۶۴ نویسه است؛ برای بازگشت به عنوان پیش‌فرض /reset بفرست.";
  return out(await tg(e,"sendMessage",{chat_id:q.message.chat.id,text:"✏️ "+hint,reply_markup:{force_reply:true,selective:true}}));
 }
