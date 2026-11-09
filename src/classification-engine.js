@@ -289,10 +289,68 @@ const favoriteCancel=async(e,q,cid,page,subPage)=>{
 export default{async fetch(req,e){
  let u;try{u=await req.clone().json()}catch{return out({ok:true})}
  const q=u.callback_query,m=u.message,id=q?.from?.id||m?.from?.id,d=String(q?.data||"");await ensure(e);
- if(q&&(d==="home_categories"||d.startsWith("home_cat:")||d.startsWith("home_cat_page:")||d.startsWith("home_cat_sub_page:")||d==="home_sort"||d.startsWith("home_sort:")||d.startsWith("home_sort_set:"))){
-  if(d==="home_sort"||d.startsWith("home_sort:"))return sortMenu(e,q,d==="home_sort"?0:d.split(":")[1]);
-  if(d.startsWith("home_sort_set:")){const [,mode,targetRaw]=d.split(":"),target=Number(targetRaw)||0;if(!["cercis","alphabetical","count"].includes(mode))return out({ok:true});await e.DB.prepare("INSERT INTO user_library_preferences(user_id,sort_mode,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET sort_mode=excluded.sort_mode,updated_at=CURRENT_TIMESTAMP").bind(id,mode).run();await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"نحوه نمایش ذخیره شد."});return target?publicCategory(e,q,target,0):publicTree(e,q,null);}
-  await tg(e,"answerCallbackQuery",{callback_query_id:q.id});if(d==="home_categories")return publicTree(e,q,null);if(d.startsWith("home_cat_page:")){const [,cid,page,subPage]=d.split(":");return publicCategory(e,q,Number(cid),Number(page)||0,Number(subPage)||0)}if(d.startsWith("home_cat_sub_page:")){const [,cid,subPage,page]=d.split(":");return publicCategory(e,q,Number(cid),Number(page)||0,Number(subPage)||0)}return publicCategory(e,q,Number(d.split(":")[1]),0,0);
+ if(q&&(d==="library_home"||d==="home_categories"||d.startsWith("home_cat:")||d.startsWith("home_cat_page:")||d.startsWith("home_cat_sub_page:")||d==="home_sort"||d==="home_sort_home"||d.startsWith("home_sort:")||d.startsWith("home_sort_set:")||d.startsWith("home_sort_shuffle:")||d.startsWith("fav_")||d.startsWith("favorites:"))){
+  if(d==="library_home")return libraryHome(e,q);
+  if(d==="home_sort"||d.startsWith("home_sort:")){
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return sortMenu(e,q,d==="home_sort"?0:d.split(":")[1],"category");
+  }
+  if(d==="home_sort_home"){
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return sortMenu(e,q,0,"hub");
+  }
+  if(d.startsWith("home_sort_set:")){
+   const [,mode,targetRaw,returnTo]=d.split(":"),target=Number(targetRaw)||0;
+   if(!["cercis","alphabetical","count","random"].includes(mode))return out({ok:true});
+   const old=await e.DB.prepare("SELECT random_seed FROM user_library_preferences WHERE user_id=?").bind(id).first();
+   const seed=mode==="random"?(Math.floor(Math.random()*2147483000)+1):(Number(old?.random_seed)||1);
+   await e.DB.prepare("INSERT INTO user_library_preferences(user_id,sort_mode,random_seed,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET sort_mode=excluded.sort_mode,random_seed=excluded.random_seed,updated_at=CURRENT_TIMESTAMP").bind(id,mode,seed).run();
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"نحوه نمایش ذخیره شد."});
+   if(returnTo==="hub")return libraryHome(e,q);
+   return target?publicCategory(e,q,target,0):publicTree(e,q);
+  }
+  if(d.startsWith("home_sort_shuffle:")){
+   const [,targetRaw,returnTo]=d.split(":"),target=Number(targetRaw)||0,seed=Math.floor(Math.random()*2147483000)+1;
+   await e.DB.prepare("INSERT INTO user_library_preferences(user_id,sort_mode,random_seed,updated_at) VALUES(?,'random',?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET sort_mode='random',random_seed=excluded.random_seed,updated_at=CURRENT_TIMESTAMP").bind(id,seed).run();
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"چینش تصادفی تازه ساخته شد."});
+   if(returnTo==="hub")return libraryHome(e,q);
+   return target?publicCategory(e,q,target,0):publicTree(e,q);
+  }
+  if(d.startsWith("favorites:")){
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return favoritesPage(e,q,Number(d.split(":")[1])||0);
+  }
+  if(d.startsWith("fav_remove:")){
+   const [,postId,page]=d.split(":").map(Number);
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   await e.DB.prepare("DELETE FROM user_library_favorites WHERE user_id=? AND post_id=?").bind(id,postId).run();
+   return favoritesPage(e,q,page||0);
+  }
+  if(d.startsWith("fav_begin:")){
+   const [,cid,page,subPage]=d.split(":").map(Number);
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return favoriteBegin(e,q,cid,page,subPage);
+  }
+  if(d.startsWith("fav_toggle:")){
+   const [,cid,page,subPage,postId]=d.split(":").map(Number);
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return favoriteToggle(e,q,cid,page,subPage,postId);
+  }
+  if(d.startsWith("fav_save:")){
+   const [,cid,page,subPage]=d.split(":").map(Number);
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return favoriteSave(e,q,cid,page,subPage);
+  }
+  if(d.startsWith("fav_cancel:")){
+   const [,cid,page,subPage]=d.split(":").map(Number);
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return favoriteCancel(e,q,cid,page,subPage);
+  }
+  await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+  if(d==="home_categories")return publicTree(e,q);
+  if(d.startsWith("home_cat_page:")){const [,cid,page,subPage]=d.split(":");return publicCategory(e,q,Number(cid),Number(page)||0,Number(subPage)||0);}
+  if(d.startsWith("home_cat_sub_page:")){const [,cid,subPage,page]=d.split(":");return publicCategory(e,q,Number(cid),Number(page)||0,Number(subPage)||0);}
+  return publicCategory(e,q,Number(d.split(":")[1]),0,0);
  }
  if(!admin(e,id))return out({ok:true});
  if(m){const s=await e.DB.prepare("SELECT * FROM sessions WHERE user_id=?").bind(id).first();
