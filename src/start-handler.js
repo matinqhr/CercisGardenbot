@@ -24,14 +24,11 @@ async function sendMenu(e,chatId,userId){
 
 async function sendMenuEdit(e,q){
   const payload=await buildStartPayload(e,q?.from?.id);
-  const body={chat_id:q?.message?.chat?.id,message_id:q?.message?.message_id,...payload};
+  const {message_effect_id,...editablePayload}=payload;
+  const body={chat_id:q?.message?.chat?.id,message_id:q?.message?.message_id,...editablePayload};
   let result=await tg(e,"editMessageText",body);
   if(result?.ok)return result;
-  const withoutEffect={...body};
-  delete withoutEffect.message_effect_id;
-  result=await tg(e,"editMessageText",withoutEffect);
-  if(result?.ok)return result;
-  const fallback={...withoutEffect};
+  const fallback={...body};
   if(fallback.reply_markup?.inline_keyboard){
     fallback.reply_markup={inline_keyboard:fallback.reply_markup.inline_keyboard.map(row=>row.map(({icon_custom_emoji_id,...button})=>button))};
   }
