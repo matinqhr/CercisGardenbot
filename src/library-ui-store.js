@@ -41,7 +41,7 @@ const STYLE_BINDING={
   save_selected:"success",cancel_selected:"danger",favorites_back:"back",
   remove_favorite:"danger",previous:"pagination",next:"pagination"
 };
-const ALLOWED_STYLES=new Set(["default","primary","success","danger"]);
+const ALLOWED_STYLES=new Set(["default","primary","success","danger","link"]);
 let schemaPromise=null;
 export async function ensureLibraryUISettings(e){
   if(!schemaPromise){
@@ -73,12 +73,35 @@ export async function resetLibraryUISettings(e){
 }
 export function libraryTextPayload(settings,key){
   const text=String(settings?.[key]??DEFAULTS[key]??"");
-  const raw=settings?.[key.replace(/_text$/,"_entities")];
-  let entities=raw;
-  if(typeof entities==="string"){try{entities=JSON.parse(entities)}catch{entities=[]}}
-  const custom=Boolean(settings?.[key.replace(/_text$/,"_custom")]);
-  if(custom)return {text,entities:Array.isArray(entities)?entities:[]};
-  return {text,parse_mode:"HTML"};
+  if(settings?.[key.replace(/_text$/,"_custom")]){
+    try{
+      const parsed=JSON.parse(text);
+      if(parsed&&typeof parsed==="object"&&!Array.isArray(parsed)&&
+        (typeof parsed.html==="string"||typeof parsed.markdown==="string"||Array.isArray(parsed.blocks)))
+        return {rich_message:{...parsed,is_rtl:true}};
+    }catch{}
+  }
+  return {rich_message:{html:text,is_rtl:true}};
+}
+const htmlEsc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+export function richButtonRows(rows=[]){
+  return rows.map(row=>{
+    const buttons=(Array.isArray(row)?row:[]).map(button=>{
+      if(!button||typeof button!=="object")return "";
+      const label=htmlEsc(button.text||"");
+      const icon=button.icon_custom_emoji_id?
+        '<tg-emoji emoji-id="'+htmlEsc(button.icon_custom_emoji_id)+'">'+htmlEsc(button.rich_custom_emoji_alt||"🌿")+'</tg-emoji>':"";
+      const body=icon+label;
+      const style=String(button.style||"");
+      const styleAttr=style&&["primary","success","danger","link"].includes(style)&&!(style==="link"&&button.url)?' style="'+style+'"':"";
+      if(button.callback_data!=null)return '<tg-button type="callback_data"'+styleAttr+' data="'+htmlEsc(button.callback_data)+'">'+body+'</tg-button>';
+      if(button.url)return '<tg-button type="url"'+styleAttr+' url="'+htmlEsc(button.url)+'">'+body+'</tg-button>';
+      if(button.switch_inline_query_current_chat!=null)return '<tg-button type="switch_inline_query_current_chat"'+styleAttr+' query="'+htmlEsc(button.switch_inline_query_current_chat)+'">'+body+'</tg-button>';
+      if(button.switch_inline_query!=null)return '<tg-button type="switch_inline_query"'+styleAttr+' query="'+htmlEsc(button.switch_inline_query)+'">'+body+'</tg-button>';
+      return "";
+    }).filter(Boolean).join("");
+    return buttons?'<tg-button-row align="center">'+buttons+'</tg-button-row>':"";
+  }).filter(Boolean).join("\\n");
 }
 export function libraryButton(settings,key,extra={}){
   const labelKey=LABEL_BINDING[key]||key;
@@ -99,7 +122,9 @@ export function buildLibraryHomePreview(settings){
     [libraryButton(settings,"search",{switch_inline_query_current_chat:""}) ,libraryButton(settings,"favorites",{callback_data:"favorites:0"})],
     [libraryButton(settings,"hub_back",{callback_data:"public_start"})]
   ];
-  return {...libraryTextPayload(settings,"hub_text"),reply_markup:{inline_keyboard:rows}};
+  const rich=libraryTextPayload(settings,"hub_text");
+  rich.rich_message.html=(String(rich.rich_message?.html||"")+richButtonRows(rows));
+  return rich;
 }
 export const LIBRARY_UI_DEFAULTS=DEFAULTS;
 export const LIBRARY_UI_STYLE_FIELDS=["browse","sort","search","favorites","back","category","post","action","success","danger","pagination"];
