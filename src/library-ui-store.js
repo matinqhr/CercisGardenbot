@@ -73,14 +73,6 @@ export async function resetLibraryUISettings(e){
 }
 export function libraryTextPayload(settings,key){
   const text=String(settings?.[key]??DEFAULTS[key]??"");
-  if(settings?.[key.replace(/_text$/,"_custom")]){
-    try{
-      const parsed=JSON.parse(text);
-      if(parsed&&typeof parsed==="object"&&!Array.isArray(parsed)&&
-        (typeof parsed.html==="string"||typeof parsed.markdown==="string"||Array.isArray(parsed.blocks)))
-        return {rich_message:{...parsed,is_rtl:true}};
-    }catch{}
-  }
   return {rich_message:{html:text,is_rtl:true}};
 }
 const htmlEsc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
