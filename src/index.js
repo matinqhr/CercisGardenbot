@@ -44,18 +44,18 @@ async function answerInline(e,iq){
     const title=norm(r.title),keywords=norm(r.keywords),categories=norm(r.categories);
     const titleHits=countHits(title,searchTerms),keywordHits=countHits(keywords,searchTerms),categoryHits=countHits(categories,searchTerms);
     const covered=new Set(searchTerms.filter(t=>title.includes(t)||keywords.includes(t)||categories.includes(t))).size;
-    let score=titleHits*110+keywordHits*32+categoryHits*16;
-    score+=(searchTerms.length?covered/searchTerms.length*45:0);
-    if(phrase&&title.includes(phrase))score+=360;
-    else score+=phraseBoost(title,searchTerms,120,30);
-    if(phrase&&keywords.includes(phrase))score+=130;
-    else score+=phraseBoost(keywords,searchTerms,65,20);
-    if(phrase&&categories.includes(phrase))score+=65;
-    else score+=phraseBoost(categories,searchTerms,35,12);
-    if(searchTerms.length>1&&covered===searchTerms.length)score+=40;
-    return {...r,score};
-   }).filter(r=>r.score>0);
-   ranked.sort((a,b)=>b.score-a.score||Number(a.message_id)-Number(b.message_id));
+    let titleScore=titleHits*100;
+    if(phrase&&title.includes(phrase))titleScore+=300;
+    else titleScore+=phraseBoost(title,searchTerms,100,25);
+    let keywordScore=keywordHits*30;
+    if(phrase&&keywords.includes(phrase))keywordScore+=120;
+    else keywordScore+=phraseBoost(keywords,searchTerms,65,20);
+    let categoryScore=categoryHits*15;
+    if(phrase&&categories.includes(phrase))categoryScore+=60;
+    else categoryScore+=phraseBoost(categories,searchTerms,35,12);
+    return {...r,titleScore,keywordScore,categoryScore,covered};
+   }).filter(r=>r.titleScore>0||r.keywordScore>0||r.categoryScore>0);
+   ranked.sort((a,b)=>b.titleScore-a.titleScore||b.keywordScore-a.keywordScore||b.categoryScore-a.categoryScore||b.covered-a.covered||Number(a.message_id)-Number(b.message_id));
    results=ranked.slice(0,50).map(r=>({type:"article",id:String(r.message_id),title:String(r.title||("پست #"+r.message_id)).slice(0,256),description:String([r.categories,r.keywords].filter(Boolean).join(" · ")||"پست آرشیو Home").slice(0,256),input_message_content:{message_text:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))},reply_markup:{inline_keyboard:[[{text:"باز کردن پست اصلی",url:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))}]]}}));
   }catch(err){console.error("[INLINE_SEARCH]",err)}
  }
