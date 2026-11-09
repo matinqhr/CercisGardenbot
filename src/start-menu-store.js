@@ -7,27 +7,33 @@ const DEFAULTS={
   guide_text:"📖 راهنما"
 };
 
+let startMenuSchemaPromise=null;
 export async function ensureStartMenuSettings(e){
-  await e.DB.prepare(`CREATE TABLE IF NOT EXISTS bot_start_menu_settings(
-    id INTEGER PRIMARY KEY CHECK(id=1),
-    start_text TEXT,
-    start_entities TEXT NOT NULL DEFAULT '[]',
-    library_text TEXT NOT NULL DEFAULT '📚 کتابخانه Home',
-    library_icon_custom_emoji_id TEXT,
-    dossiers_text TEXT NOT NULL DEFAULT '📜 فهرست پرونده‌های ثبت‌شده',
-    dossiers_icon_custom_emoji_id TEXT,
-    about_text TEXT NOT NULL DEFAULT 'ℹ️ درباره ربات',
-    about_icon_custom_emoji_id TEXT,
-    guide_text TEXT NOT NULL DEFAULT '📖 راهنما',
-    guide_icon_custom_emoji_id TEXT,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-  )`).run();
-  await e.DB.prepare("INSERT OR IGNORE INTO bot_start_menu_settings(id) VALUES(1)").run();
-  await e.DB.prepare(`CREATE TABLE IF NOT EXISTS bot_start_menu_sessions(
-    user_id INTEGER PRIMARY KEY,
-    field TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-  )`).run();
+  if(!startMenuSchemaPromise){
+    startMenuSchemaPromise=(async()=>{
+      await e.DB.prepare(`CREATE TABLE IF NOT EXISTS bot_start_menu_settings(
+        id INTEGER PRIMARY KEY CHECK(id=1),
+        start_text TEXT,
+        start_entities TEXT NOT NULL DEFAULT '[]',
+        library_text TEXT NOT NULL DEFAULT '📚 کتابخانه Home',
+        library_icon_custom_emoji_id TEXT,
+        dossiers_text TEXT NOT NULL DEFAULT '📜 فهرست پرونده‌های ثبت‌شده',
+        dossiers_icon_custom_emoji_id TEXT,
+        about_text TEXT NOT NULL DEFAULT 'ℹ️ درباره ربات',
+        about_icon_custom_emoji_id TEXT,
+        guide_text TEXT NOT NULL DEFAULT '📖 راهنما',
+        guide_icon_custom_emoji_id TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`).run();
+      await e.DB.prepare("INSERT OR IGNORE INTO bot_start_menu_settings(id) VALUES(1)").run();
+      await e.DB.prepare(`CREATE TABLE IF NOT EXISTS bot_start_menu_sessions(
+        user_id INTEGER PRIMARY KEY,
+        field TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`).run();
+    })().catch(err=>{startMenuSchemaPromise=null;throw err;});
+  }
+  await startMenuSchemaPromise;
 }
 
 export async function getStartMenuSettings(e){
@@ -43,7 +49,7 @@ export async function getLibraryEnabled(e){
 }
 
 export function defaultStartText(){
-  return "🌳 <b>Cercis Garden</b>\\n\\nکتابخانه‌ای از اطلاعات پست‌های <a href=\"https://t.me/Arghavanplaylistt\">𝐇𝐨𝐦𝐞</a>.\\n\\nلینک یا خودِ پستی را که از 𝐇𝐨𝐦𝐞 دریافت کرده‌اید برای من ارسال کنید.";
+  return "🌳 <b>Cercis Garden</b>\n\nکتابخانه‌ای از اطلاعات پست‌های <a href=\"https://t.me/Arghavanplaylistt\">𝐇𝐨𝐦𝐞</a>.\n\nلینک یا خودِ پستی را که از 𝐇𝐨𝐦𝐞 دریافت کرده‌اید برای من ارسال کنید.";
 }
 
 export function buildStartKeyboard(settings,libraryEnabled){
