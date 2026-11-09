@@ -27,7 +27,7 @@ async function openSettings(e,q){
   [{text:"🔙 بازگشت به پنل مدیریت",callback_data:"panel"}]
  ];
  const text="🎨 <b>شخصی‌سازی کتابخانه</b>\n\n"+
-  "متن صفحهٔ اصلی و فهرست شاخه‌ها را با Rich HTML تلگرام ویرایش کن؛ هایلایت با <mark>، لینک روی متن با <a href='https://example.com'>، تیتر، نقل‌قول و بخش‌های بازشونده پشتیبانی می‌شوند. دکمه‌ها داخل خود Rich Message قرار می‌گیرند.\n\n"+
+  "متن صفحهٔ اصلی و فهرست شاخه‌ها را با Rich HTML تلگرام ویرایش کن؛ نمونهٔ هایلایت: &lt;mark&gt;متن&lt;/mark&gt;، لینک روی متن: &lt;a href=&quot;https://example.com&quot;&gt;Home&lt;/a&gt;، تیتر، نقل‌قول و بخش‌های بازشونده هم پشتیبانی می‌شوند. دکمه‌ها داخل خود Rich Message قرار می‌گیرند.\n\n"+
   "<b>متن‌ها:</b>\n"+
   "صفحهٔ اصلی: "+(String(s.hub_text||"").trim()?"شخصی‌سازی‌شده":"پیش‌فرض")+"\n"+
   "فهرست شاخه‌ها: "+(String(s.tree_text||"").trim()?"شخصی‌سازی‌شده":"پیش‌فرض")+"\n\n"+
@@ -46,7 +46,7 @@ async function styleMenu(e,q){
  const s=await getLibraryUISettings(e),rows=[];
  for(const key of LIBRARY_UI_STYLE_FIELDS)rows.push([{text:STYLE_NAMES_FA[key]+": "+STYLE_NAMES[s[key+"_style"]||"default"],callback_data:"libraryui_stylepick:"+key}]);
  rows.push([{text:"🔙 بازگشت",callback_data:"libraryui_open"}]);
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🎨 <b>رنگ‌بندی دکمه‌ها</b>\n\nدکمه‌های Rich Message می‌توانند پیش‌فرض، اصلی، سبز، قرمز یا لینک‌مانند باشند. هایلایت متن با <mark> و لینک داخل متن با <a href=URL> انجام می‌شود.",parse_mode:"HTML",reply_markup:{inline_keyboard:rows}}));
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🎨 <b>رنگ‌بندی دکمه‌ها</b>\n\nدکمه‌های Rich Message می‌توانند پیش‌فرض، اصلی، سبز، قرمز یا لینک‌مانند باشند. برای هایلایت، از &lt;mark&gt;متن&lt;/mark&gt; و برای لینک از &lt;a href=&quot;...&quot;&gt;متن&lt;/a&gt; استفاده کن.",parse_mode:"HTML",reply_markup:{inline_keyboard:rows}}));
 }
 async function stylePicker(e,q,key){
  if(!LIBRARY_UI_STYLE_FIELDS.includes(key))return out({ok:true});
