@@ -179,8 +179,12 @@ const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
   :(await e.DB.prepare(sql).bind(cid,limit+1,offset).all()).results||[]);
  const hasNext=rows.length>limit;rows.splice(limit);
  const posts=[];for(const p of rows){const mark=await dossierMark(e,p.message_id);posts.push({...p,mark})}
- const session=await e.DB.prepare("SELECT 1 present FROM user_library_selection_sessions WHERE user_id=?").bind(q.from.id).first();
+ const session=await e.DB.prepare("SELECT 1 present FROM user_library_selection_sessions WHERE user_id=? AND updated_at>=datetime('now','-7 days')").bind(q.from.id).first();
  const selecting=!!session;
+ if(!selecting){
+  await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=? AND user_id IN (SELECT user_id FROM user_library_selection_sessions WHERE user_id=? AND updated_at<datetime('now','-7 days'))").bind(q.from.id,q.from.id).run();
+  await e.DB.prepare("DELETE FROM user_library_selection_sessions WHERE user_id=? AND updated_at<datetime('now','-7 days')").bind(q.from.id).run();
+ }
  let selected=new Set();
  if(selecting){
   const picked=(await e.DB.prepare("SELECT post_id FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).all()).results||[];
@@ -259,13 +263,14 @@ const favoriteBegin=async(e,q,cid,page,subPage)=>{
  return publicCategory(e,q,cid,page,subPage);
 };
 const favoriteToggle=async(e,q,cid,page,subPage,postId)=>{
- const active=await e.DB.prepare("SELECT 1 present FROM user_library_selection_sessions WHERE user_id=?").bind(q.from.id).first();
+ const active=await e.DB.prepare("SELECT 1 present FROM user_library_selection_sessions WHERE user_id=? AND updated_at>=datetime('now','-7 days')").bind(q.from.id).first();
  if(!active)return publicCategory(e,q,cid,page,subPage);
  const valid=await e.DB.prepare("SELECT 1 present FROM home_archive_posts p JOIN home_post_paths pp ON pp.post_id=p.message_id JOIN home_post_path_nodes pn ON pn.path_id=pp.id WHERE p.message_id=? AND pn.category_id=? AND COALESCE(p.status,'pending')!='deleted' AND NOT EXISTS (SELECT 1 FROM home_post_path_nodes next WHERE next.path_id=pn.path_id AND next.level>pn.level) LIMIT 1").bind(postId,cid).first();
  if(!valid)return publicCategory(e,q,cid,page,subPage);
  const exists=await e.DB.prepare("SELECT 1 present FROM user_library_selection_items WHERE user_id=? AND post_id=?").bind(q.from.id,postId).first();
  if(exists)await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=? AND post_id=?").bind(q.from.id,postId).run();
  else await e.DB.prepare("INSERT OR IGNORE INTO user_library_selection_items(user_id,post_id) VALUES(?,?)").bind(q.from.id,postId).run();
+ await e.DB.prepare("UPDATE user_library_selection_sessions SET updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(q.from.id).run();
  return publicCategory(e,q,cid,page,subPage);
 };
 const favoriteSave=async(e,q,cid,page,subPage)=>{
