@@ -36,7 +36,7 @@ async function beginEdit(e,q,field){
   if(!["text","library","dossiers","about","guide"].includes(field))return out({ok:true});
   await e.DB.prepare("INSERT INTO bot_start_menu_sessions(user_id,field,created_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET field=excluded.field,created_at=CURRENT_TIMESTAMP").bind(q.from.id,field).run();
   const hint=field==="text"
-    ?"متن کامل پیام /start را ارسال کن. قالب‌بندی و ایموجی‌های پرمیومِ موجود در همان پیام، در صورت ارسال Entity از تلگرام، حفظ می‌شوند. برای بازگشت به متن پیش‌فرض /reset بفرست."
+    ?"متن کامل پیام /start را ارسال کن. بولد، ایتالیک، زیرخط، نقل‌قول، Spoiler، لینک‌های متصل به متن و ایموجی‌های پرمیوم حفظ می‌شوند. برای ساخت لینک روی واژه‌ها، متن را در تلگرام قالب‌بندی کن و همان پیام را بفرست. برای بازگشت به متن پیش‌فرض /reset بفرست."
     :"عنوان جدید "+LABELS[field]+" را ارسال کن. می‌توانی یک ایموجی معمولی یا Custom Emoji در ابتدای عنوان قرار بدهی. حداکثر ۶۴ نویسه؛ برای بازگشت به عنوان پیش‌فرض /reset بفرست.";
   return out(await tg(e,"sendMessage",{chat_id:q.message.chat.id,text:"✏️ "+hint,reply_markup:{force_reply:true,selective:true}}));
 }
