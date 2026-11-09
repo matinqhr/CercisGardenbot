@@ -75,8 +75,24 @@ export async function resetLibraryUISettings(e){
   return {...DEFAULTS};
 }
 const brandHomeHtml=value=>String(value??"").replace(/(<[^>]*>)|([^<]+)/g,(_,tag,text)=>tag||text.replace(/\bHome\b/g,"𝐇𝐨𝐦𝐞"));
+const RICH_BLOCK_TAGS=new Set(["p","div","h1","h2","h3","h4","h5","h6","blockquote","ul","ol","li","hr","br","pre","details","summary","section","article","tg-button-row"]);
+const richTagName=tag=>String(tag||"").match(/^<\s*\/?\s*([a-z][a-z0-9-]*)\b/i)?.[1]?.toLowerCase()||"";
+export function richTextWithLineBreaks(value){
+  const source=String(value??"").replace(/\r\n?/g,"\n");
+  const parts=source.split(/(<[^>]*>)/g);
+  return parts.map((part,index)=>{
+    if(part.startsWith("<")&&part.endsWith(">"))return part;
+    const previousName=richTagName(parts[index-1]),nextName=richTagName(parts[index+1]);
+    const previousBlock=RICH_BLOCK_TAGS.has(previousName),nextBlock=RICH_BLOCK_TAGS.has(nextName);
+    return part.replace(/\n+/g,(breaks,offset)=>{
+      const leading=!part.slice(0,offset).trim(),trailing=!part.slice(offset+breaks.length).trim();
+      if((leading&&previousBlock)||(trailing&&nextBlock))return " ";
+      return "<br/>".repeat(breaks.length);
+    });
+  }).join("");
+}
 export function libraryTextPayload(settings,key){
-  const text=brandHomeHtml(settings?.[key]??DEFAULTS[key]??"");
+  const text=richTextWithLineBreaks(brandHomeHtml(settings?.[key]??DEFAULTS[key]??""));
   return {rich_message:{html:text,is_rtl:true}};
 }
 const htmlEsc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
@@ -120,7 +136,7 @@ export function buildLibraryHomePreview(settings){
     [libraryButton(settings,"hub_back",{callback_data:"public_start"})]
   ];
   const rich=libraryTextPayload(settings,"hub_text");
-  rich.rich_message.html=String(rich.rich_message?.html||"")+"\\n"+richButtonRows(rows);
+  rich.rich_message.html=String(rich.rich_message?.html||"")+"<br/>"+richButtonRows(rows);
   return rich;
 }
 export const LIBRARY_UI_DEFAULTS=DEFAULTS;
