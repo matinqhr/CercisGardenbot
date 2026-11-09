@@ -49,7 +49,11 @@ const renderLibraryPage=async(e,q,html,buttons)=>{
   return out(edited);
  }
  const rich={html:body+richButtonRows(buttons),is_rtl:true};
- return out(await tg(e,"editMessageText",{chat_id:chatId,message_id:messageId,rich_message:rich}));
+ const edited=await tg(e,"editMessageText",{chat_id:chatId,message_id:messageId,rich_message:rich});
+ if(edited?.ok||String(edited?.description||"").toLowerCase().includes("message is not modified"))return out(edited);
+ const sent=await tg(e,"sendRichMessage",{chat_id:chatId,...rich});
+ if(sent?.ok){await tg(e,"deleteMessage",{chat_id:chatId,message_id:messageId});return out(sent);}
+ return out(edited);
 };
 
 let schemaReady=false;
