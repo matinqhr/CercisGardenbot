@@ -246,7 +246,7 @@ const sortMenu=async(e,q,parent,returnTo="category")=>{
  if(current==="random")rows.push([libraryButton(ui,"add_favorites",{text:"🔀 ساخت چینش تصادفی تازه",callback_data:"home_sort_shuffle:"+target+":"+returnTo})]);
  const backKey=returnTo==="hub"?"hub_back":target?"category_back":"tree_back";
  rows.push([libraryButton(ui,backKey,{callback_data:returnTo==="hub"?"library_home":target?"home_cat:"+target:"home_categories"})]);
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,rich_message:{html:"⚙️ <b>نحوه نمایش</b>\\n\\nترتیب دلخواه را انتخاب کن:\\n\\nترتیب تصادفی برای هر کاربر پایدار می‌ماند تا زمانی که چینش تازه ساخته شود."+richButtonRows(rows),is_rtl:true}}));
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,rich_message:{html:"⚙️ <b>نحوه نمایش</b>\n\nترتیب دلخواه را انتخاب کن:\n\nترتیب تصادفی برای هر کاربر پایدار می‌ماند تا زمانی که چینش تازه ساخته شود."+richButtonRows(rows),is_rtl:true}}));
 };
 
 const favoritesPage=async(e,q,page=0)=>{
