@@ -16,6 +16,8 @@ export async function ensureStartMenuSettings(e){
         id INTEGER PRIMARY KEY CHECK(id=1),
         start_text TEXT,
         start_entities TEXT NOT NULL DEFAULT '[]',
+        start_source_chat_id INTEGER,
+        start_source_message_id INTEGER,
         library_text TEXT NOT NULL DEFAULT '📚 کتابخانه Home',
         library_icon_custom_emoji_id TEXT,
         dossiers_text TEXT NOT NULL DEFAULT '📜 فهرست پرونده‌های ثبت‌شده',
@@ -27,6 +29,10 @@ export async function ensureStartMenuSettings(e){
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )`).run();
       await e.DB.prepare("INSERT OR IGNORE INTO bot_start_menu_settings(id) VALUES(1)").run();
+      const columnsResult=await e.DB.prepare("PRAGMA table_info(bot_start_menu_settings)").all();
+      const columns=new Set((columnsResult.results||[]).map(column=>column.name));
+      if(!columns.has("start_source_chat_id"))await e.DB.prepare("ALTER TABLE bot_start_menu_settings ADD COLUMN start_source_chat_id INTEGER").run();
+      if(!columns.has("start_source_message_id"))await e.DB.prepare("ALTER TABLE bot_start_menu_settings ADD COLUMN start_source_message_id INTEGER").run();
       await e.DB.prepare(`CREATE TABLE IF NOT EXISTS bot_start_menu_sessions(
         user_id INTEGER PRIMARY KEY,
         field TEXT NOT NULL,
@@ -65,12 +71,16 @@ export function defaultStartText(){
 }
 
 function startButton(settings,field,callback,libraryEnabled){
-  if(field==="library"&&!libraryEnabled)return "";
+  if(field==="library"&&!libraryEnabled)return null;
   const label=String(settings?.[field+"_text"]||DEFAULTS[field+"_text"]).trim();
   const icon=settings?.[field+"_icon_custom_emoji_id"];
-  const iconHtml=icon?'<tg-emoji emoji-id="'+esc(icon)+'">🌿</tg-emoji>':"";
-  const style=BUTTON_STYLES[field],styleAttr=style!=="default"?' style="'+style+'"':"";
-  return '<tg-button type="callback_data"'+styleAttr+' data="'+callback+'">'+iconHtml+esc(label)+'</tg-button>';
+  const style=BUTTON_STYLES[field];
+  return {
+    text:label,
+    ...(icon?{icon_custom_emoji_id:String(icon)}:{}),
+    ...(style&&style!=="default"?{style}:{}),
+    callback_data:callback
+  };
 }
 
 export function buildStartKeyboard(settings,libraryEnabled){
@@ -82,7 +92,7 @@ export function buildStartKeyboard(settings,libraryEnabled){
     startButton(settings,"about","about",libraryEnabled),
     startButton(settings,"guide","help",libraryEnabled)
   ]);
-  return rows.map(row=>'<tg-button-row align="center">'+row.filter(Boolean).join("")+'</tg-button-row>').join("\n");
+  return {inline_keyboard:rows.map(row=>row.filter(Boolean))};
 }
 
 function normalizeRichInput(raw){
@@ -93,10 +103,30 @@ function normalizeRichInput(raw){
 export async function buildStartPayload(e,userId){
   const settings=await getStartMenuSettings(e);
   const libraryEnabled=await getLibraryEnabled(e);
-  const rich=normalizeRichInput(settings?.start_text);
-  rich.html=rich.html+"\\n"+buildStartKeyboard(settings,libraryEnabled);
-  return {
-    rich_message:rich,
-    message_effect_id:"5159385139981059251"
-  };
+  const reply_markup=buildStartKeyboard(settings,libraryEnabled);
+  const message_effect_id="5159385139981059251";
+  const from_chat_id=Number(settings?.start_source_chat_id);
+  const message_id=Number(settings?.start_source_message_id);
+  if(Number.isSafeInteger(from_chat_id)&&from_chat_id!==0&&Number.isSafeInteger(message_id)&&message_id>0){
+    return {source:{from_chat_id,message_id},reply_markup,message_effect_id};
+  }
+  return {rich_message:normalizeRichInput(settings?.start_text),reply_markup,message_effect_id};
+}
+
+export async function sendStartMenuMessage(e,chatId,userId){
+  const payload=await buildStartPayload(e,userId);
+  if(payload.source){
+    return tg(e,"copyMessage",{
+      chat_id:chatId,
+      ...payload.source,
+      reply_markup:payload.reply_markup,
+      message_effect_id:payload.message_effect_id
+    });
+  }
+  return tg(e,"sendRichMessage",{
+    chat_id:chatId,
+    rich_message:payload.rich_message,
+    reply_markup:payload.reply_markup,
+    message_effect_id:payload.message_effect_id
+  });
 }
