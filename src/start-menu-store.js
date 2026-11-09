@@ -65,13 +65,13 @@ export function buildStartKeyboard(settings,libraryEnabled){
 export async function buildStartPayload(e,userId){
   const settings=await getStartMenuSettings(e);
   const libraryEnabled=await getLibraryEnabled(e);
-  const raw=String(settings?.start_text||"").trim();
+  const raw=String(settings?.start_text??"");
   const payload={
-    text:raw||defaultStartText(),
+    text:raw.trim()?raw:defaultStartText(),
     reply_markup:buildStartKeyboard(settings,libraryEnabled),
     message_effect_id:"5159385139981059251"
   };
-  if(raw){
+  if(raw.trim()){
     let entities=[];
     try{entities=JSON.parse(String(settings?.start_entities||"[]"))}catch{}
     if(Array.isArray(entities)&&entities.length)payload.entities=entities;
