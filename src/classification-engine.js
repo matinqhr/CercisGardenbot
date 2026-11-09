@@ -40,15 +40,16 @@ const renderLibraryPage=async(e,q,html,buttons)=>{
  const pref=await e.DB.prepare("SELECT display_mode FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();
  const mode=String(pref?.display_mode||"rich")==="glass"?"glass":"rich";
  const body=brandHomeHtml(html),chatId=q.message.chat.id,messageId=q.message.message_id;
+ const normalizedButtons=(Array.isArray(buttons)?buttons:[]).map(row=>(Array.isArray(row)?row:[]).map(button=>button&&typeof button==="object"?{...button,text:String(button.text??"").replace(/\bHome\b/g,"𝐇𝐨𝐦𝐞")}:button));
  if(mode==="glass"){
-  const text=standardLibraryHtml(body),reply_markup={inline_keyboard:standardLibraryButtons(buttons)};
+  const text=standardLibraryHtml(body),reply_markup={inline_keyboard:standardLibraryButtons(normalizedButtons)};
   const edited=await tg(e,"editMessageText",{chat_id:chatId,message_id:messageId,text,parse_mode:"HTML",reply_markup});
   if(edited?.ok||String(edited?.description||"").toLowerCase().includes("message is not modified"))return out(edited);
   const sent=await tg(e,"sendMessage",{chat_id:chatId,text,parse_mode:"HTML",reply_markup});
   if(sent?.ok){await tg(e,"deleteMessage",{chat_id:chatId,message_id:messageId});return out(sent);}
   return out(edited);
  }
- const rich={html:body+richButtonRows(buttons),is_rtl:true};
+ const rich={html:body+richButtonRows(normalizedButtons),is_rtl:true};
  const edited=await tg(e,"editMessageText",{chat_id:chatId,message_id:messageId,rich_message:rich});
  if(edited?.ok||String(edited?.description||"").toLowerCase().includes("message is not modified"))return out(edited);
  const sent=await tg(e,"sendRichMessage",{chat_id:chatId,...rich});
