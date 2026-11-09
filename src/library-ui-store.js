@@ -1,8 +1,10 @@
 const DEFAULTS=Object.freeze({
   hub_text:"🗂 <b>کتابخانه Home</b>\n\nدر این بخش می‌توانی شاخه‌های آرشیو را مرور کنی، ترتیب نمایش را تغییر بدهی، در پست‌ها جست‌وجو کنی و پست‌های دلخواهت را در فهرست علاقه‌مندی‌ها نگه داری.",
   hub_entities:[],
+  hub_custom:false,
   tree_text:"🗂 <b>شاخه‌های کتابخانه Home</b>\n\nیک شاخه را برای مرور پست‌ها انتخاب کن:",
   tree_entities:[],
+  tree_custom:false,
   browse_text:"🗂 مرور شاخه‌های کتابخانه",
   sort_text:"⚙️ تغییر ترتیب نمایش",
   search_text:"🔎 جست‌وجو",
@@ -31,6 +33,7 @@ const DEFAULTS=Object.freeze({
   danger_style:"danger",
   pagination_style:"default"
 });
+const LABEL_BINDING={hub_sort:"sort"};
 const STYLE_BINDING={
   browse:"browse",hub_sort:"sort",search:"search",favorites:"favorites",hub_back:"back",
   tree_sort:"sort",tree_back:"back",category:"category",post:"post",
@@ -70,15 +73,17 @@ export async function resetLibraryUISettings(e){
 }
 export function libraryTextPayload(settings,key){
   const text=String(settings?.[key]??DEFAULTS[key]??"");
-  const raw=settings?.[key.replace(/_text$/,"_entities")]??settings?.[key.replace(/_text$/,"_entities")];
+  const raw=settings?.[key.replace(/_text$/,"_entities")];
   let entities=raw;
   if(typeof entities==="string"){try{entities=JSON.parse(entities)}catch{entities=[]}}
-  if(Array.isArray(entities)&&entities.length)return {text,entities};
+  const custom=Boolean(settings?.[key.replace(/_text$/,"_custom")]);
+  if(custom)return {text,entities:Array.isArray(entities)?entities:[]};
   return {text,parse_mode:"HTML"};
 }
 export function libraryButton(settings,key,extra={}){
-  const label=String(extra.text??settings?.[key+"_text"]??DEFAULTS[key+"_text"]??key).trim();
-  const icon=settings?.[key+"_icon_custom_emoji_id"];
+  const labelKey=LABEL_BINDING[key]||key;
+  const label=String(extra.text??settings?.[labelKey+"_text"]??DEFAULTS[labelKey+"_text"]??key).trim();
+  const icon=settings?.[labelKey+"_icon_custom_emoji_id"];
   const styleKey=STYLE_BINDING[key]||key;
   const style=String(settings?.[styleKey+"_style"]??DEFAULTS[styleKey+"_style"]??"default");
   return {text:label,...(icon?{icon_custom_emoji_id:String(icon)}:{}),...(ALLOWED_STYLES.has(style)&&style!=="default"?{style}:{}),...extra};
