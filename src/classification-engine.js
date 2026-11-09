@@ -45,6 +45,11 @@ const ensure=async e=>{
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS classification_settings(id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER NOT NULL DEFAULT 1,library_enabled INTEGER NOT NULL DEFAULT 0,next_message_id INTEGER NOT NULL DEFAULT 1,last_message_id INTEGER NOT NULL DEFAULT 0)").run();
  stage="user_library_preferences table";
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS user_library_preferences(user_id INTEGER PRIMARY KEY,sort_mode TEXT NOT NULL DEFAULT 'cercis',updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
+ try{await e.DB.prepare("ALTER TABLE user_library_preferences ADD COLUMN random_seed INTEGER NOT NULL DEFAULT 1").run()}catch{}
+ await e.DB.prepare("CREATE TABLE IF NOT EXISTS user_library_favorites(user_id INTEGER NOT NULL,post_id INTEGER NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,post_id))").run();
+ await e.DB.prepare("CREATE INDEX IF NOT EXISTS user_library_favorites_order ON user_library_favorites(user_id,created_at,post_id)").run();
+ await e.DB.prepare("CREATE TABLE IF NOT EXISTS user_library_selection_sessions(user_id INTEGER PRIMARY KEY,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
+ await e.DB.prepare("CREATE TABLE IF NOT EXISTS user_library_selection_items(user_id INTEGER NOT NULL,post_id INTEGER NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,post_id))").run();
  try{await e.DB.prepare("ALTER TABLE classification_settings ADD COLUMN library_enabled INTEGER NOT NULL DEFAULT 0").run()}catch{}
  stage="classification_settings insert";
  await e.DB.prepare("INSERT OR IGNORE INTO classification_settings(id) VALUES(1)").run();
