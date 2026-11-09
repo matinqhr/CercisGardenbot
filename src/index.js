@@ -29,40 +29,33 @@ async function answerInline(e,iq){
   const terms=allTerms.filter(t=>!stopWords.has(t));
   const searchTerms=terms.length?terms:allTerms;
   const phrase=searchTerms.join(" ");
-  const ftsTerms=[...new Set(searchTerms.filter(t=>Array.from(t).length>=3))].slice(0,10);
-  let rows=[];
-  if(ftsTerms.length){
-   const match=ftsTerms.map(t=>'"'+t.replaceAll('"','""')+'"').join(" OR ");
-   try{
-    rows=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE((SELECT GROUP_CONCAT(k.keyword,' ') FROM home_post_keywords k WHERE k.post_id=p.message_id),'') keywords,COALESCE(o.overview,'') overview,bm25(home_search_fts) fts_rank FROM home_search_fts JOIN home_archive_posts p ON p.message_id=home_search_fts.rowid LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE home_search_fts MATCH ? AND COALESCE(p.status,'')!='deleted' ORDER BY bm25(home_search_fts) ASC LIMIT 3000").bind(match).all()).results||[];
-   }catch(err){console.error("[INLINE_SEARCH_FTS]",err)}
-  }
-  if(!rows.length){
-   rows=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE((SELECT GROUP_CONCAT(k.keyword,' ') FROM home_post_keywords k WHERE k.post_id=p.message_id),'') keywords,COALESCE(o.overview,'') overview,0 fts_rank FROM home_archive_posts p LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE COALESCE(p.status,'')!='deleted' ORDER BY p.message_id DESC LIMIT 5000").all()).results||[];
-  }
-  const countHits=(text,words)=>words.reduce((n,t)=>n+(text.includes(t)?1:0),0);
-  const phraseBoost=(text,words,base,perWord)=>{
-   let best=0;
-   for(let i=0;i<words.length;i++)for(let j=words.length;j>i+1;j--){
-    const part=words.slice(i,j).join(" ");
-    if(part.length>=4&&text.includes(part))best=Math.max(best,base+(j-i)*perWord);
-   }
-   return best;
-  };
-  const ranked=rows.map(r=>{
-   const title=norm(r.title),keywords=norm(r.keywords),overview=norm(r.overview);
-   const titleHits=countHits(title,searchTerms),keywordHits=countHits(keywords,searchTerms),overviewHits=countHits(overview,searchTerms);
-   let score=titleHits*34+(searchTerms.length?titleHits/searchTerms.length*40:0)+keywordHits*13+(searchTerms.length?keywordHits/searchTerms.length*12:0)+overviewHits*4;
-   if(phrase&&title.includes(phrase))score+=240;
-   else score+=phraseBoost(title,searchTerms,70,22);
-   if(phrase&&keywords.includes(phrase))score+=95;
-   else score+=phraseBoost(keywords,searchTerms,40,14);
-   score+=phraseBoost(overview,searchTerms,20,7);
-   if(searchTerms.length>1&&titleHits===searchTerms.length)score+=45;
-   return {...r,score};
-  }).filter(r=>r.score>0);
-  ranked.sort((a,b)=>b.score-a.score||Number(a.fts_rank||0)-Number(b.fts_rank||0)||Number(a.message_id)-Number(b.message_id));
-  results=ranked.slice(0,50).map(r=>({type:"article",id:String(r.message_id),title:String(r.title||("پست #"+r.message_id)).slice(0,256),description:String(r.keywords||"پست آرشیو Home").slice(0,256),input_message_content:{message_text:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))},reply_markup:{inline_keyboard:[[{text:"باز کردن پست اصلی",url:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))}]]}}));
+  try{
+   const rows=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE((SELECT GROUP_CONCAT(k.keyword,' ') FROM home_post_keywords k WHERE k.post_id=p.message_id),'') keywords,COALESCE((SELECT GROUP_CONCAT(category_name,' ') FROM (SELECT DISTINCT c.name category_name FROM home_post_paths pp JOIN home_post_path_nodes pn ON pn.path_id=pp.id JOIN classification_categories c ON c.id=pn.category_id WHERE pp.post_id=p.message_id)),'') categories FROM home_archive_posts p WHERE COALESCE(p.status,'')!='deleted' AND (EXISTS(SELECT 1 FROM home_post_keywords k WHERE k.post_id=p.message_id) OR EXISTS(SELECT 1 FROM home_post_paths pp JOIN home_post_path_nodes pn ON pn.path_id=pp.id JOIN classification_categories c ON c.id=pn.category_id WHERE pp.post_id=p.message_id)").all()).results||[];
+   const countHits=(text,words)=>words.reduce((n,t)=>n+(text.includes(t)?1:0),0);
+   const phraseBoost=(text,words,base,perWord)=>{
+    let best=0;
+    for(let i=0;i<words.length;i++)for(let j=words.length;j>i+1;j--){
+     const part=words.slice(i,j).join(" ");
+     if(part.length>=4&&text.includes(part))best=Math.max(best,base+(j-i)*perWord);
+    }
+    return best;
+   };
+   const ranked=rows.map(r=>{
+    const categories=norm(r.categories),keywords=norm(r.keywords);
+    const categoryHits=countHits(categories,searchTerms),keywordHits=countHits(keywords,searchTerms);
+    const covered=new Set(searchTerms.filter(t=>categories.includes(t)||keywords.includes(t))).size;
+    let score=categoryHits*32+keywordHits*28;
+    score+=(searchTerms.length?covered/searchTerms.length*45:0);
+    if(phrase&&categories.includes(phrase))score+=180;
+    else score+=phraseBoost(categories,searchTerms,55,18);
+    if(phrase&&keywords.includes(phrase))score+=160;
+    else score+=phraseBoost(keywords,searchTerms,50,16);
+    if(searchTerms.length>1&&covered===searchTerms.length)score+=50;
+    return {...r,score};
+   }).filter(r=>r.score>0);
+   ranked.sort((a,b)=>b.score-a.score||Number(a.message_id)-Number(b.message_id));
+   results=ranked.slice(0,50).map(r=>({type:"article",id:String(r.message_id),title:String(r.title||("پست #"+r.message_id)).slice(0,256),description:String([r.categories,r.keywords].filter(Boolean).join(" · ")||"پست آرشیو Home").slice(0,256),input_message_content:{message_text:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))},reply_markup:{inline_keyboard:[[{text:"باز کردن پست اصلی",url:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))}]]}}));
+  }catch(err){console.error("[INLINE_SEARCH]",err)}
  }
  const response=await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results,cache_time:0,is_personal:true});
  if(!response?.ok)console.error("[INLINE_SEARCH_TELEGRAM]",JSON.stringify(response));
