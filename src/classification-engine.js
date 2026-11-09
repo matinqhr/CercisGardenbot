@@ -45,6 +45,11 @@ const ensure=async e=>{
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS classification_settings(id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER NOT NULL DEFAULT 1,library_enabled INTEGER NOT NULL DEFAULT 0,next_message_id INTEGER NOT NULL DEFAULT 1,last_message_id INTEGER NOT NULL DEFAULT 0)").run();
  stage="user_library_preferences table";
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS user_library_preferences(user_id INTEGER PRIMARY KEY,sort_mode TEXT NOT NULL DEFAULT 'cercis',updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
+ try{await e.DB.prepare("ALTER TABLE user_library_preferences ADD COLUMN random_seed INTEGER NOT NULL DEFAULT 1").run()}catch{}
+ await e.DB.prepare("CREATE TABLE IF NOT EXISTS user_library_favorites(user_id INTEGER NOT NULL,post_id INTEGER NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,post_id))").run();
+ await e.DB.prepare("CREATE INDEX IF NOT EXISTS user_library_favorites_order ON user_library_favorites(user_id,created_at,post_id)").run();
+ await e.DB.prepare("CREATE TABLE IF NOT EXISTS user_library_selection_sessions(user_id INTEGER PRIMARY KEY,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
+ await e.DB.prepare("CREATE TABLE IF NOT EXISTS user_library_selection_items(user_id INTEGER NOT NULL,post_id INTEGER NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,post_id))").run();
  try{await e.DB.prepare("ALTER TABLE classification_settings ADD COLUMN library_enabled INTEGER NOT NULL DEFAULT 0").run()}catch{}
  stage="classification_settings insert";
  await e.DB.prepare("INSERT OR IGNORE INTO classification_settings(id) VALUES(1)").run();
@@ -63,10 +68,14 @@ const refreshSearchDocument=async(e,postId)=>{
  const sql="INSERT INTO home_search_documents(post_id,content) SELECT p.message_id,lower(replace(replace(replace(replace(COALESCE(p.title,'')||' '||COALESCE((SELECT GROUP_CONCAT(k.keyword,' ') FROM home_post_keywords k WHERE k.post_id=p.message_id),'')||' '||COALESCE(o.overview,''),'ي','ی'),'ك','ک'),char(8204),' '),char(1600),' ')) FROM home_archive_posts p LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE p.message_id=? ON CONFLICT(post_id) DO UPDATE SET content=excluded.content";
  await e.DB.prepare(sql).bind(id).run();
 };
-const children=async(e,parent,mode="cercis")=>{
+const children=async(e,parent,mode="cercis",seed=1)=>{
  if(mode==="count"){
   const sql="WITH RECURSIVE tree(root,id) AS (SELECT id,id FROM classification_categories UNION ALL SELECT t.root,c.id FROM classification_categories c JOIN tree t ON c.parent_id=t.id) SELECT c.*,COUNT(DISTINCT pp.post_id) n FROM classification_categories c LEFT JOIN tree t ON t.root=c.id LEFT JOIN home_post_path_nodes pn ON pn.category_id=t.id LEFT JOIN home_post_paths pp ON pp.id=pn.path_id "+(parent==null?"WHERE c.parent_id IS NULL":"WHERE c.parent_id=?")+" GROUP BY c.id ORDER BY n DESC,c.sort_order ASC,c.id ASC";
   const r=parent==null?await e.DB.prepare(sql).all():await e.DB.prepare(sql).bind(parent).all();return r.results||[];
+ }
+ if(mode==="random"){
+  const sql=parent==null?"SELECT * FROM classification_categories WHERE parent_id IS NULL ORDER BY ((id*((1103515245+((?%2147483646)*40699))%2147483647))%2147483647),id":"SELECT * FROM classification_categories WHERE parent_id=? ORDER BY ((id*1103515245+?)%2147483647),id";
+  const r=parent==null?await e.DB.prepare(sql).bind(Number(seed)||1).all():await e.DB.prepare(sql).bind(parent,Number(seed)||1).all();return r.results||[];
  }
  const order=mode==="alphabetical"?"name COLLATE NOCASE ASC,sort_order ASC,id ASC":"sort_order ASC,id ASC";
  const sql=parent==null?"SELECT * FROM classification_categories WHERE parent_id IS NULL ORDER BY "+order:"SELECT * FROM classification_categories WHERE parent_id=? ORDER BY "+order;
@@ -132,34 +141,224 @@ const treeRoot=async(e,q,page=0)=>{const cs=await children(e,null),pages=Math.ma
 const treeCat=async(e,q,cid,page=0,parentPage=0)=>{const c=await e.DB.prepare("SELECT * FROM classification_categories WHERE id=?").bind(cid).first();if(!c)return treeRoot(e,q,parentPage);const sub=await children(e,cid),pages=Math.max(1,Math.ceil(sub.length/TREE_PAGE_SIZE));page=Math.max(0,Math.min(pages-1,Number(page)||0));const visible=sub.slice(page*TREE_PAGE_SIZE,(page+1)*TREE_PAGE_SIZE),buttons=visible.map(x=>[{...categoryButton(x),callback_data:"ce_tree_cat:"+x.id+":0:"+page}]);buttons.push(...treePageButtons(cid,page,sub.length,parentPage));buttons.push([{text:"➕ زیرطبقه جدید",callback_data:"ce_tree_new:"+cid}],[{text:"✏️ تغییر نام",callback_data:"ce_tree_rename:"+cid+":"+page+":"+parentPage}],[{text:"↕️ تغییر ترتیب",callback_data:"ce_tree_order:"+cid}],[{text:"🗑 حذف طبقه",callback_data:"ce_tree_delete:"+cid}]);if(c.parent_id!=null)buttons.push([{text:"⬆️ بازگشت به والد",callback_data:"ce_tree_cat:"+c.parent_id+":"+parentPage+":0"}]);else buttons.push([{text:"⬅️ فهرست طبقات اصلی",callback_data:"ce_tree_page:0:"+parentPage}]);return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🌳 <b>ساختار کتابخانه</b>\\n\\nمسیر: <b>"+catHtml(c.name,c.emoji_id,c.emoji)+"</b>\\n\\nزیرطبقه‌ها: "+(sub.length||"ندارد")+"\\nصفحه "+(page+1)+"/"+pages,parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));};
 const treePrompt=async(e,q,step,cid,draft={})=>{await e.DB.prepare("INSERT INTO sessions(user_id,step,channel,post_id,url,draft,updated_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET step=excluded.step,channel=excluded.channel,post_id=excluded.post_id,url=excluded.url,draft=excluded.draft,updated_at=CURRENT_TIMESTAMP").bind(q.from.id,step,HOME,cid||0,"https://t.me/"+HOME+"/"+(cid||0),JSON.stringify(draft)).run();const text=step==="CLASSIFY_TREE_RENAME"?"✏️ نام جدید این طبقه را بفرست.":step==="CLASSIFY_TREE_ORDER"?"↕️ عدد جابه‌جایی را بفرست؛ مثلاً 1 یا -1.":"➕ نام طبقهٔ جدید را بفرست.";return out(await tg(e,"sendMessage",{chat_id:q.message.chat.id,text}));};
 
-const publicTree=async(e,q,parent)=>{
- const s=await setting(e);if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));
- const pref=await e.DB.prepare("SELECT sort_mode FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();const mode=parent==null?"cercis":String(pref?.sort_mode||"cercis"),cs=await children(e,parent,mode),buttons=cs.map(c=>[{...categoryButton(c,"",mode==="count"?" ("+Number(c.n||0)+")":""),callback_data:"home_cat:"+c.id}]);buttons.push([{text:"⚙️ نحوه نمایش",callback_data:"home_sort"}]);if(parent!=null)buttons.push([{text:"🔙 بازگشت",callback_data:"home_categories"}]);else buttons.push([{text:"🔙 منوی اصلی",callback_data:"public_start"}]);return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🗂 <b>کتابخانه Home</b>\n\nیک شاخه را انتخاب کن:",parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
+const libraryHome=async(e,q)=>{
+ const s=await setting(e);
+ if(!Number(s.library_enabled))return out({ok:true});
+ const text="🗂 <b>کتابخانه Home</b>\n\nدر این بخش می‌توانی شاخه‌های آرشیو را مرور کنی، ترتیب نمایش را تغییر بدهی، در پست‌ها جست‌وجو کنی و پست‌های دلخواهت را در فهرست علاقه‌مندی‌ها نگه داری.";
+ const keyboard={inline_keyboard:[
+  [{text:"🗂 مرور شاخه‌های کتابخانه",callback_data:"home_categories",style:"primary"}],
+  [{text:"⚙️ تغییر ترتیب نمایش",callback_data:"home_sort_home"}],
+  [{text:"🔎 جست‌وجو",switch_inline_query_current_chat:"",style:"success"},{text:"❤️ پست‌های پسندیده‌شده",callback_data:"favorites:0"}],
+  [{text:"🔙 منوی اصلی",callback_data:"public_start"}]
+ ]};
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text,parse_mode:"HTML",reply_markup:keyboard}));
 };
+
+const publicTree=async(e,q)=>{
+ const s=await setting(e);if(!Number(s.library_enabled))return out({ok:true});
+ const pref=await e.DB.prepare("SELECT sort_mode,random_seed FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();
+ const mode=String(pref?.sort_mode||"cercis"),seed=Number(pref?.random_seed)||1;
+ const cs=await children(e,null,mode,seed);
+ const buttons=cs.map(c=>[{...categoryButton(c,"",mode==="count"?" ("+Number(c.n||0)+")":""),callback_data:"home_cat:"+c.id}]);
+ if(!buttons.length)buttons.push([{text:"هنوز شاخه‌ای ثبت نشده است",callback_data:"home_categories"}]);
+ buttons.push([{text:"⚙️ نحوه نمایش",callback_data:"home_sort"}]);
+ buttons.push([{text:"🔙 بازگشت به کتابخانه",callback_data:"library_home"}]);
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🗂 <b>شاخه‌های کتابخانه Home</b>\n\nیک شاخه را برای مرور پست‌ها انتخاب کن:",parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
+};
+
 const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
- const s=await setting(e);if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));
+ const s=await setting(e);if(!Number(s.library_enabled))return out({ok:true});
  const c=await e.DB.prepare("SELECT * FROM classification_categories WHERE id=?").bind(cid).first();if(!c)return out({ok:true});
- const pref=await e.DB.prepare("SELECT sort_mode FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first(),mode=String(pref?.sort_mode||"cercis"),allSub=await children(e,cid,mode),subLimit=15,subOffset=Math.max(0,Number(subPage)||0)*subLimit,sub=allSub.slice(subOffset,subOffset+subLimit),subHasNext=allSub.length>subOffset+subLimit,limit=20,offset=Math.max(0,Number(page)||0)*limit;
- const rows=(await e.DB.prepare("SELECT DISTINCT p.message_id,p.url,p.title,p.title_emoji,p.title_emoji_id FROM home_archive_posts p JOIN home_post_paths pp ON pp.post_id=p.message_id JOIN home_post_path_nodes pn ON pn.path_id=pp.id WHERE pn.category_id=? AND p.status!='deleted' AND NOT EXISTS (SELECT 1 FROM home_post_path_nodes next WHERE next.path_id=pn.path_id AND next.level>pn.level) ORDER BY p.message_id DESC LIMIT ? OFFSET ?").bind(cid,limit+1,offset).all()).results||[];
+ const pref=await e.DB.prepare("SELECT sort_mode,random_seed FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();
+ const mode=String(pref?.sort_mode||"cercis"),seed=Number(pref?.random_seed)||1;
+ const allSub=await children(e,cid,mode,seed),subLimit=15,subOffset=Math.max(0,Number(subPage)||0)*subLimit,sub=allSub.slice(subOffset,subOffset+subLimit),subHasNext=allSub.length>subOffset+subLimit,limit=20,offset=Math.max(0,Number(page)||0)*limit;
+ const order=mode==="random"?"((p.message_id * ((1103515245 + ((? % 2147483646) * 40699)) % 2147483647)) % 2147483647) ASC, p.message_id ASC":"p.message_id DESC";
+ const sql="SELECT DISTINCT p.message_id,p.url,p.title,p.title_emoji,p.title_emoji_id FROM home_archive_posts p JOIN home_post_paths pp ON pp.post_id=p.message_id JOIN home_post_path_nodes pn ON pn.path_id=pp.id WHERE pn.category_id=? AND COALESCE(p.status,'pending')!='deleted' AND NOT EXISTS (SELECT 1 FROM home_post_path_nodes next WHERE next.path_id=pn.path_id AND next.level>pn.level) ORDER BY "+order+" LIMIT ? OFFSET ?";
+ const rows=(mode==="random"
+  ?(await e.DB.prepare(sql).bind(cid,seed,cid,limit+1,offset).all()).results||[]
+  :(await e.DB.prepare(sql).bind(cid,limit+1,offset).all()).results||[]);
  const hasNext=rows.length>limit;rows.splice(limit);
  const posts=[];for(const p of rows){const mark=await dossierMark(e,p.message_id);posts.push({...p,mark})}
+ const session=await e.DB.prepare("SELECT 1 present FROM user_library_selection_sessions WHERE user_id=? AND updated_at>=datetime('now','-7 days')").bind(q.from.id).first();
+ const selecting=!!session;
+ if(!selecting){
+  await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=? AND user_id IN (SELECT user_id FROM user_library_selection_sessions WHERE user_id=? AND updated_at<datetime('now','-7 days'))").bind(q.from.id,q.from.id).run();
+  await e.DB.prepare("DELETE FROM user_library_selection_sessions WHERE user_id=? AND updated_at<datetime('now','-7 days')").bind(q.from.id).run();
+ }
+ let selected=new Set();
+ if(selecting){
+  const picked=(await e.DB.prepare("SELECT post_id FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).all()).results||[];
+  selected=new Set(picked.map(x=>Number(x.post_id)));
+ }
+ const selectedCount=selecting?await e.DB.prepare("SELECT COUNT(*) n FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).first():null;
  const buttons=sub.map(x=>[{...categoryButton(x,"",mode==="count"?" ("+Number(x.n||0)+")":""),callback_data:"home_cat:"+x.id}]);
  const subNav=[];if(subPage>0)subNav.push({text:"◀️ شاخه‌های قبل",callback_data:"home_cat_sub_page:"+cid+":"+(subPage-1)+":"+page});if(subHasNext)subNav.push({text:"شاخه‌های بعد ▶️",callback_data:"home_cat_sub_page:"+cid+":"+(subPage+1)+":"+page});if(subNav.length)buttons.push(subNav);
- buttons.push(...posts.map(x=>[{text:(String(x.title||"").trim()||("📌 پست #"+x.message_id))+x.mark,url:x.url,...(x.title_emoji_id?{icon_custom_emoji_id:String(x.title_emoji_id)}:{})}]));
+ buttons.push(...posts.map(x=>{
+  const title=(String(x.title||"").trim()||("📌 پست #"+x.message_id))+x.mark;
+  if(selecting)return [{text:(selected.has(Number(x.message_id))?"✅ ":"▫️ ")+title.slice(0,60),callback_data:"fav_toggle:"+cid+":"+page+":"+subPage+":"+x.message_id,style:selected.has(Number(x.message_id))?"success":"primary"}];
+  return [{text:title.slice(0,64),url:x.url,...(x.title_emoji_id?{icon_custom_emoji_id:String(x.title_emoji_id)}:{})}];
+ }));
  const nav=[];if(page>0)nav.push({text:"◀️ پست‌های قبل",callback_data:"home_cat_page:"+cid+":"+(page-1)+":"+subPage});if(hasNext)nav.push({text:"پست‌های بعد ▶️",callback_data:"home_cat_page:"+cid+":"+(page+1)+":"+subPage});if(nav.length)buttons.push(nav);
- buttons.push([{text:"⚙️ نحوه نمایش",callback_data:"home_sort:"+cid}],[{text:"🔙 بازگشت",callback_data:c.parent_id==null?"home_categories":"home_cat:"+c.parent_id}]);
- const linkedTitles=posts.map(x=>{const title=String(x.title||"").trim()||("📌 پست #"+x.message_id);const icon=x.title_emoji_id?'<tg-emoji emoji-id="'+esc(x.title_emoji_id)+'">'+esc(x.title_emoji||"🌕")+"</tg-emoji>":"";return '• <a href="'+esc(x.url)+'">'+icon+esc(title)+'</a>'+esc(x.mark)}).join("\n");
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🗂 <b>"+esc(c.name)+"</b>\n\n"+(allSub.length?"شاخه‌ها و پست‌های مستقیم این بخش:":"پست‌های مستقیم این بخش:")+(linkedTitles?"\n\n"+linkedTitles:""),parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
+ buttons.push([{text:"⚙️ نحوه نمایش",callback_data:"home_sort:"+cid}]);
+ if(selecting){
+  buttons.push([{text:"✅ ثبت منتخب‌ها ("+Number(selectedCount?.n||0)+")",callback_data:"fav_save:"+cid+":"+page+":"+subPage,style:"success"}]);
+  buttons.push([{text:"✖️ لغو انتخاب",callback_data:"fav_cancel:"+cid+":"+page+":"+subPage,style:"danger"}]);
+ }else if(posts.length){
+  buttons.push([{text:"❤️ افزودن پست‌ها به فهرست علاقه‌مندی",callback_data:"fav_begin:"+cid+":"+page+":"+subPage}]);
+ }
+ buttons.push([{text:"🔙 بازگشت",callback_data:c.parent_id==null?"home_categories":"home_cat:"+c.parent_id}]);
+ const linkedTitles=posts.map(x=>{
+  const title=String(x.title||"").trim()||("📌 پست #"+x.message_id);
+  const icon=x.title_emoji_id?'<tg-emoji emoji-id="'+esc(x.title_emoji_id)+'">'+esc(x.title_emoji||"🌕")+"</tg-emoji>":"";
+  if(selecting)return (selected.has(Number(x.message_id))?"✅ ":"▫️ ")+icon+esc(title)+esc(x.mark);
+  return '• <a href="'+esc(x.url)+'">'+icon+esc(title)+'</a>'+esc(x.mark);
+ }).join("\n");
+ const body="🗂 <b>"+esc(c.name)+"</b>\n\n"+(selecting?"حالت انتخاب فعال است؛ پست‌های موردنظر را انتخاب کن.\n\n":"")+(allSub.length?"شاخه‌ها و پست‌های مستقیم این بخش:":"پست‌های مستقیم این بخش:")+(linkedTitles?"\n\n"+linkedTitles:"\n\nدر این صفحه پستی ثبت نشده است.");
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:body,parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
 };
-const sortMenu=async(e,q,parent)=>{const s=await setting(e);if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));const target=Number(parent)||0;const pref=await e.DB.prepare("SELECT sort_mode FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first(),current=String(pref?.sort_mode||"cercis"),cb=m=>"home_sort_set:"+m+":"+target;return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"⚙️ <b>نحوه نمایش</b>\n\nترتیب فعلی را انتخاب کن:",parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:current==="cercis"?"🟢 ترتیب سرسیس":"⚪ ترتیب سرسیس",callback_data:cb("cercis")}],[{text:current==="alphabetical"?"🟢 الفبایی":"⚪ الفبایی",callback_data:cb("alphabetical")}],[{text:current==="count"?"🟢 بر اساس تعداد":"⚪ بر اساس تعداد",callback_data:cb("count")}],[{text:"🔙 بازگشت",callback_data:target?"home_cat:"+target:"home_categories"}]]}}))};
+
+const sortMenu=async(e,q,parent,returnTo="category")=>{
+ const s=await setting(e);if(!Number(s.library_enabled))return out({ok:true});
+ const target=Number(parent)||0;
+ const pref=await e.DB.prepare("SELECT sort_mode FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();
+ const current=String(pref?.sort_mode||"cercis"),cb=m=>"home_sort_set:"+m+":"+target+":"+returnTo;
+ const rows=[
+  [{text:current==="cercis"?"🟢 ترتیب سرسیس":"⚪ ترتیب سرسیس",callback_data:cb("cercis")}],
+  [{text:current==="alphabetical"?"🟢 الفبایی":"⚪ الفبایی",callback_data:cb("alphabetical")}],
+  [{text:current==="count"?"🟢 بر اساس تعداد":"⚪ بر اساس تعداد",callback_data:cb("count")}],
+  [{text:current==="random"?"🟢 ترتیب تصادفی":"⚪ ترتیب تصادفی",callback_data:cb("random")}]
+ ];
+ if(current==="random")rows.push([{text:"🔀 ساخت چینش تصادفی تازه",callback_data:"home_sort_shuffle:"+target+":"+returnTo,style:"success"}]);
+ rows.push([{text:"🔙 بازگشت",callback_data:returnTo==="hub"?"library_home":target?"home_cat:"+target:"home_categories"}]);
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"⚙️ <b>نحوه نمایش</b>\n\nترتیب دلخواه را انتخاب کن:\n\nترتیب تصادفی برای هر کاربر پایدار می‌ماند تا زمانی که چینش تازه ساخته شود.",parse_mode:"HTML",reply_markup:{inline_keyboard:rows}}));
+};
+
+const favoritesPage=async(e,q,page=0)=>{
+ const userId=Number(q.from?.id),size=15;
+ const totalRow=await e.DB.prepare("SELECT COUNT(*) n FROM user_library_favorites f JOIN home_archive_posts p ON p.message_id=f.post_id WHERE f.user_id=? AND COALESCE(p.status,'pending')!='deleted'").bind(userId).first();
+ const totalItems=Number(totalRow?.n||0),pages=Math.max(1,Math.ceil(totalItems/size)),safePage=Math.max(0,Math.min(pages-1,Number(page)||0));
+ const rows=(await e.DB.prepare("SELECT f.post_id,p.url,p.title,p.title_emoji,p.title_emoji_id FROM user_library_favorites f JOIN home_archive_posts p ON p.message_id=f.post_id WHERE f.user_id=? AND COALESCE(p.status,'pending')!='deleted' ORDER BY f.created_at DESC,f.post_id DESC LIMIT ? OFFSET ?").bind(userId,size,safePage*size).all()).results||[];
+ const buttons=[];
+ for(const r of rows){
+  const label=String(r.title||("پست #"+r.post_id)).trim().slice(0,56);
+  buttons.push([
+   {text:label,url:String(r.url||("https://t.me/"+HOME+"/"+r.post_id)),...(r.title_emoji_id?{icon_custom_emoji_id:String(r.title_emoji_id)}:{})},
+   {text:"✖️",callback_data:"fav_remove:"+r.post_id+":"+safePage,style:"danger"}
+  ]);
+ }
+ const nav=[];if(safePage>0)nav.push({text:"‹ پست‌های جدیدتر",callback_data:"favorites:"+(safePage-1)});if(safePage+1<pages)nav.push({text:"پست‌های قدیمی‌تر ›",callback_data:"favorites:"+(safePage+1)});if(nav.length)buttons.push(nav);
+ buttons.push([{text:"🔙 بازگشت به کتابخانه",callback_data:"library_home"}]);
+ const lines=rows.map((r,i)=>{
+  const title=String(r.title||("پست #"+r.post_id));
+  const icon=r.title_emoji_id?'<tg-emoji emoji-id="'+esc(r.title_emoji_id)+'">'+esc(r.title_emoji||"🌕")+"</tg-emoji>":"";
+  return (safePage*size+i+1)+". "+icon+'<a href="'+esc(r.url||("https://t.me/"+HOME+"/"+r.post_id))+'">'+esc(title)+'</a>';
+ });
+ const text="❤️ <b>فهرست پست‌های پسندیده‌شده</b>\n\n"+(totalItems?"پست‌هایی که ذخیره کرده‌ای:\n\n"+lines.join("\n"):"هنوز پستی به فهرست علاقه‌مندی‌ها اضافه نکرده‌ای.")+"\n\n<i>صفحه "+(safePage+1)+" از "+pages+" · تعداد: "+totalItems+"</i>";
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text,parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
+};
+
+const favoriteBegin=async(e,q,cid,page,subPage)=>{
+ await e.DB.prepare("INSERT INTO user_library_selection_sessions(user_id,created_at,updated_at) VALUES(?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET updated_at=CURRENT_TIMESTAMP").bind(q.from.id).run();
+ await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).run();
+ return publicCategory(e,q,cid,page,subPage);
+};
+const favoriteToggle=async(e,q,cid,page,subPage,postId)=>{
+ const active=await e.DB.prepare("SELECT 1 present FROM user_library_selection_sessions WHERE user_id=? AND updated_at>=datetime('now','-7 days')").bind(q.from.id).first();
+ if(!active)return publicCategory(e,q,cid,page,subPage);
+ const valid=await e.DB.prepare("SELECT 1 present FROM home_archive_posts p JOIN home_post_paths pp ON pp.post_id=p.message_id JOIN home_post_path_nodes pn ON pn.path_id=pp.id WHERE p.message_id=? AND pn.category_id=? AND COALESCE(p.status,'pending')!='deleted' AND NOT EXISTS (SELECT 1 FROM home_post_path_nodes next WHERE next.path_id=pn.path_id AND next.level>pn.level) LIMIT 1").bind(postId,cid).first();
+ if(!valid)return publicCategory(e,q,cid,page,subPage);
+ const exists=await e.DB.prepare("SELECT 1 present FROM user_library_selection_items WHERE user_id=? AND post_id=?").bind(q.from.id,postId).first();
+ if(exists)await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=? AND post_id=?").bind(q.from.id,postId).run();
+ else await e.DB.prepare("INSERT OR IGNORE INTO user_library_selection_items(user_id,post_id) VALUES(?,?)").bind(q.from.id,postId).run();
+ await e.DB.prepare("UPDATE user_library_selection_sessions SET updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(q.from.id).run();
+ return publicCategory(e,q,cid,page,subPage);
+};
+const favoriteSave=async(e,q,cid,page,subPage)=>{
+ const count=await e.DB.prepare("SELECT COUNT(*) n FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).first();
+ if(!Number(count?.n||0))return publicCategory(e,q,cid,page,subPage);
+ await e.DB.prepare("INSERT OR IGNORE INTO user_library_favorites(user_id,post_id) SELECT user_id,post_id FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).run();
+ await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).run();
+ await e.DB.prepare("DELETE FROM user_library_selection_sessions WHERE user_id=?").bind(q.from.id).run();
+ return publicCategory(e,q,cid,page,subPage);
+};
+const favoriteCancel=async(e,q,cid,page,subPage)=>{
+ await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).run();
+ await e.DB.prepare("DELETE FROM user_library_selection_sessions WHERE user_id=?").bind(q.from.id).run();
+ return publicCategory(e,q,cid,page,subPage);
+};
+
+
 
 export default{async fetch(req,e){
  let u;try{u=await req.clone().json()}catch{return out({ok:true})}
  const q=u.callback_query,m=u.message,id=q?.from?.id||m?.from?.id,d=String(q?.data||"");await ensure(e);
- if(q&&(d==="home_categories"||d.startsWith("home_cat:")||d.startsWith("home_cat_page:")||d.startsWith("home_cat_sub_page:")||d==="home_sort"||d.startsWith("home_sort:")||d.startsWith("home_sort_set:"))){
-  if(d==="home_sort"||d.startsWith("home_sort:"))return sortMenu(e,q,d==="home_sort"?0:d.split(":")[1]);
-  if(d.startsWith("home_sort_set:")){const [,mode,targetRaw]=d.split(":"),target=Number(targetRaw)||0;if(!["cercis","alphabetical","count"].includes(mode))return out({ok:true});await e.DB.prepare("INSERT INTO user_library_preferences(user_id,sort_mode,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET sort_mode=excluded.sort_mode,updated_at=CURRENT_TIMESTAMP").bind(id,mode).run();await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"نحوه نمایش ذخیره شد."});return target?publicCategory(e,q,target,0):publicTree(e,q,null);}
-  await tg(e,"answerCallbackQuery",{callback_query_id:q.id});if(d==="home_categories")return publicTree(e,q,null);if(d.startsWith("home_cat_page:")){const [,cid,page,subPage]=d.split(":");return publicCategory(e,q,Number(cid),Number(page)||0,Number(subPage)||0)}if(d.startsWith("home_cat_sub_page:")){const [,cid,subPage,page]=d.split(":");return publicCategory(e,q,Number(cid),Number(page)||0,Number(subPage)||0)}return publicCategory(e,q,Number(d.split(":")[1]),0,0);
+ if(q&&(d==="library_home"||d==="home_categories"||d.startsWith("home_cat:")||d.startsWith("home_cat_page:")||d.startsWith("home_cat_sub_page:")||d==="home_sort"||d==="home_sort_home"||d.startsWith("home_sort:")||d.startsWith("home_sort_set:")||d.startsWith("home_sort_shuffle:")||d.startsWith("fav_")||d.startsWith("favorites:"))){
+  if(d==="library_home"){
+   const s=await setting(e);
+   if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً غیرفعال است.",show_alert:true}));
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return libraryHome(e,q);
+  }
+  if(d==="home_sort"||d.startsWith("home_sort:")){
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return sortMenu(e,q,d==="home_sort"?0:d.split(":")[1],"category");
+  }
+  if(d==="home_sort_home"){
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return sortMenu(e,q,0,"hub");
+  }
+  if(d.startsWith("home_sort_set:")){
+   const [,mode,targetRaw,returnTo]=d.split(":"),target=Number(targetRaw)||0;
+   if(!["cercis","alphabetical","count","random"].includes(mode))return out({ok:true});
+   const old=await e.DB.prepare("SELECT random_seed FROM user_library_preferences WHERE user_id=?").bind(id).first();
+   const seed=mode==="random"?(Math.floor(Math.random()*2147483000)+1):(Number(old?.random_seed)||1);
+   await e.DB.prepare("INSERT INTO user_library_preferences(user_id,sort_mode,random_seed,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET sort_mode=excluded.sort_mode,random_seed=excluded.random_seed,updated_at=CURRENT_TIMESTAMP").bind(id,mode,seed).run();
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"نحوه نمایش ذخیره شد."});
+   if(returnTo==="hub")return libraryHome(e,q,true);
+   return target?publicCategory(e,q,target,0):publicTree(e,q);
+  }
+  if(d.startsWith("home_sort_shuffle:")){
+   const [,targetRaw,returnTo]=d.split(":"),target=Number(targetRaw)||0,seed=Math.floor(Math.random()*2147483000)+1;
+   await e.DB.prepare("INSERT INTO user_library_preferences(user_id,sort_mode,random_seed,updated_at) VALUES(?,'random',?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET sort_mode='random',random_seed=excluded.random_seed,updated_at=CURRENT_TIMESTAMP").bind(id,seed).run();
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"چینش تصادفی تازه ساخته شد."});
+   if(returnTo==="hub")return libraryHome(e,q);
+   return target?publicCategory(e,q,target,0):publicTree(e,q);
+  }
+  if(d.startsWith("favorites:")){
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return favoritesPage(e,q,Number(d.split(":")[1])||0);
+  }
+  if(d.startsWith("fav_remove:")){
+   const [,postId,page]=d.split(":").map(Number);
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   await e.DB.prepare("DELETE FROM user_library_favorites WHERE user_id=? AND post_id=?").bind(id,postId).run();
+   return favoritesPage(e,q,page||0);
+  }
+  if(d.startsWith("fav_begin:")){
+   const [,cid,page,subPage]=d.split(":").map(Number);
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return favoriteBegin(e,q,cid,page,subPage);
+  }
+  if(d.startsWith("fav_toggle:")){
+   const [,cid,page,subPage,postId]=d.split(":").map(Number);
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return favoriteToggle(e,q,cid,page,subPage,postId);
+  }
+  if(d.startsWith("fav_save:")){
+   const [,cid,page,subPage]=d.split(":").map(Number);
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return favoriteSave(e,q,cid,page,subPage);
+  }
+  if(d.startsWith("fav_cancel:")){
+   const [,cid,page,subPage]=d.split(":").map(Number);
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return favoriteCancel(e,q,cid,page,subPage);
+  }
+  await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+  if(d==="home_categories")return publicTree(e,q);
+  if(d.startsWith("home_cat_page:")){const [,cid,page,subPage]=d.split(":");return publicCategory(e,q,Number(cid),Number(page)||0,Number(subPage)||0);}
+  if(d.startsWith("home_cat_sub_page:")){const [,cid,subPage,page]=d.split(":");return publicCategory(e,q,Number(cid),Number(page)||0,Number(subPage)||0);}
+  return publicCategory(e,q,Number(d.split(":")[1]),0,0);
  }
  if(!admin(e,id))return out({ok:true});
  if(m){const s=await e.DB.prepare("SELECT * FROM sessions WHERE user_id=?").bind(id).first();
