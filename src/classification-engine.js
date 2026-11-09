@@ -241,7 +241,7 @@ const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
  }
  const selectedCount=selecting?await e.DB.prepare("SELECT COUNT(*) n FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).first():null;
  const buttons=sub.map(x=>[styleLibraryButton(ui,"category",{...categoryButton(x,"",mode==="count"?" ("+Number(x.n||0)+")":""),callback_data:"home_cat:"+x.id})]);
- const subNav=[];if(subPage>0)subNav.push(styleLibraryButton(ui,"pagination",{text:"◀️ شاخه‌های قبل",callback_data:"home_cat_sub_page:"+cid+":"+(subPage-1)+":"+page}));if(subHasNext)subNav.push(styleLibraryButton(ui,"pagination",{text:"شاخه‌های بعد ▶️",callback_data:"home_cat_sub_page:"+cid+":"+(subPage+1)+":"+page}));if(subNav.length)buttons.push(subNav);
+ const subNav=[];if(subPage>0)subNav.push(libraryButton(ui,"previous_branches",{callback_data:"home_cat_sub_page:"+cid+":"+(subPage-1)+":"+page}));if(subHasNext)subNav.push(libraryButton(ui,"next_branches",{callback_data:"home_cat_sub_page:"+cid+":"+(subPage+1)+":"+page}));if(subNav.length)buttons.push(subNav);
  buttons.push(...posts.map(x=>{
   const title=(String(x.title||"").trim()||("📌 پست #"+x.message_id))+x.mark;
   if(selecting)return [styleLibraryButton(ui,selected.has(Number(x.message_id))?"success":"category",{text:(selected.has(Number(x.message_id))?"✅ ":"▫️ ")+title.slice(0,60),callback_data:"fav_toggle:"+cid+":"+page+":"+subPage+":"+x.message_id})];
@@ -256,14 +256,8 @@ const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
   buttons.push([libraryButton(ui,"add_favorites",{callback_data:"fav_begin:"+cid+":"+page+":"+subPage})]);
  }
  buttons.push([libraryButton(ui,"category_back",{callback_data:c.parent_id==null?"home_categories":"home_cat:"+c.parent_id})]);
- const linkedTitles=posts.map(x=>{
-  const title=String(x.title||"").trim()||("📌 پست #"+x.message_id);
-  const icon=x.title_emoji_id?'<tg-emoji emoji-id="'+esc(x.title_emoji_id)+'">'+esc(x.title_emoji||"🌕")+"</tg-emoji>":"";
-  if(selecting)return (selected.has(Number(x.message_id))?"✅ ":"▫️ ")+icon+esc(title)+esc(x.mark);
-  return '• <a href="'+esc(x.url)+'">'+icon+esc(title)+'</a>'+esc(x.mark);
- }).join("\n");
- const body="🗂 <b>"+esc(c.name)+"</b>\n\n"+(selecting?"حالت انتخاب فعال است؛ پست‌های موردنظر را انتخاب کن.\n\n":"")+(allSub.length?"شاخه‌ها و پست‌های مستقیم این بخش:":"پست‌های مستقیم این بخش:")+(linkedTitles?"\n\n"+linkedTitles:"\n\nدر این صفحه پستی ثبت نشده است.");
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,rich_message:{html:body+richButtonRows(buttons),is_rtl:true}}));
+ const body="<h2>🗂 "+esc(c.name)+"</h2>"+(selecting?"<p>حالت انتخاب فعال است؛ پست‌های موردنظر را از دکمه‌های پایین انتخاب کن.</p>":"")+(allSub.length?"<p>زیرشاخه‌ها و پست‌های این بخش در دکمه‌های پایین قرار دارند.</p>":"<p>پست‌های این شاخه از دکمه‌های پایین در دسترس هستند.</p>")+(posts.length?"<p>برای مشاهدهٔ هر پست، عنوان آن را انتخاب کن.</p>":"<p>در این شاخه هنوز پستی ثبت نشده است.</p>");
+ return renderLibraryPage(e,q,body,buttons);
 };
 
 const sortMenu=async(e,q,parent,returnTo="category")=>{
@@ -282,7 +276,7 @@ const sortMenu=async(e,q,parent,returnTo="category")=>{
  if(current==="random")rows.push([libraryButton(ui,"add_favorites",{text:"🔀 ساخت چینش تصادفی تازه",callback_data:"home_sort_shuffle:"+target+":"+returnTo})]);
  const backKey=returnTo==="hub"?"hub_back":target?"category_back":"tree_back";
  rows.push([libraryButton(ui,backKey,{callback_data:returnTo==="hub"?"library_home":target?"home_cat:"+target:"home_categories"})]);
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,rich_message:{html:"⚙️ <b>نحوه نمایش</b>\n\nترتیب دلخواه را انتخاب کن:\n\nترتیب تصادفی برای هر کاربر پایدار می‌ماند تا زمانی که چینش تازه ساخته شود."+richButtonRows(rows),is_rtl:true}}));
+ return renderLibraryPage(e,q,"<h2>⚙️ نحوهٔ نمایش</h2><p>ترتیب دلخواه را انتخاب کن.</p><p>ترتیب تصادفی برای هر کاربر پایدار می‌ماند تا زمانی که چینش تازه ساخته شود.</p>",rows);
 };
 
 const favoritesPage=async(e,q,page=0)=>{
@@ -307,7 +301,7 @@ const favoritesPage=async(e,q,page=0)=>{
   return (safePage*size+i+1)+". "+icon+'<a href="'+esc(r.url||("https://t.me/"+HOME+"/"+r.post_id))+'">'+esc(title)+'</a>';
  });
  const text="❤️ <b>فهرست پست‌های پسندیده‌شده</b>\n\n"+(totalItems?"پست‌هایی که ذخیره کرده‌ای:\n\n"+lines.join("\n"):"هنوز پستی به فهرست علاقه‌مندی‌ها اضافه نکرده‌ای.")+"\n\n<i>صفحه "+(safePage+1)+" از "+pages+" · تعداد: "+totalItems+"</i>";
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,rich_message:{html:text+richButtonRows(buttons),is_rtl:true}}));
+ return renderLibraryPage(e,q,text,buttons);
 };
 
 const favoriteBegin=async(e,q,cid,page,subPage)=>{
