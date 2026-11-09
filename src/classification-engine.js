@@ -68,10 +68,14 @@ const refreshSearchDocument=async(e,postId)=>{
  const sql="INSERT INTO home_search_documents(post_id,content) SELECT p.message_id,lower(replace(replace(replace(replace(COALESCE(p.title,'')||' '||COALESCE((SELECT GROUP_CONCAT(k.keyword,' ') FROM home_post_keywords k WHERE k.post_id=p.message_id),'')||' '||COALESCE(o.overview,''),'ي','ی'),'ك','ک'),char(8204),' '),char(1600),' ')) FROM home_archive_posts p LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE p.message_id=? ON CONFLICT(post_id) DO UPDATE SET content=excluded.content";
  await e.DB.prepare(sql).bind(id).run();
 };
-const children=async(e,parent,mode="cercis")=>{
+const children=async(e,parent,mode="cercis",seed=1)=>{
  if(mode==="count"){
   const sql="WITH RECURSIVE tree(root,id) AS (SELECT id,id FROM classification_categories UNION ALL SELECT t.root,c.id FROM classification_categories c JOIN tree t ON c.parent_id=t.id) SELECT c.*,COUNT(DISTINCT pp.post_id) n FROM classification_categories c LEFT JOIN tree t ON t.root=c.id LEFT JOIN home_post_path_nodes pn ON pn.category_id=t.id LEFT JOIN home_post_paths pp ON pp.id=pn.path_id "+(parent==null?"WHERE c.parent_id IS NULL":"WHERE c.parent_id=?")+" GROUP BY c.id ORDER BY n DESC,c.sort_order ASC,c.id ASC";
   const r=parent==null?await e.DB.prepare(sql).all():await e.DB.prepare(sql).bind(parent).all();return r.results||[];
+ }
+ if(mode==="random"){
+  const sql=parent==null?"SELECT * FROM classification_categories WHERE parent_id IS NULL ORDER BY ((id*1103515245+?)%2147483647),id":"SELECT * FROM classification_categories WHERE parent_id=? ORDER BY ((id*1103515245+?)%2147483647),id";
+  const r=parent==null?await e.DB.prepare(sql).bind(Number(seed)||1).all():await e.DB.prepare(sql).bind(parent,Number(seed)||1).all();return r.results||[];
  }
  const order=mode==="alphabetical"?"name COLLATE NOCASE ASC,sort_order ASC,id ASC":"sort_order ASC,id ASC";
  const sql=parent==null?"SELECT * FROM classification_categories WHERE parent_id IS NULL ORDER BY "+order:"SELECT * FROM classification_categories WHERE parent_id=? ORDER BY "+order;
