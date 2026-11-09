@@ -36,7 +36,7 @@ async function beginEdit(e,q,field){
   if(!["text","library","dossiers","about","guide"].includes(field))return out({ok:true});
   await e.DB.prepare("INSERT INTO bot_start_menu_sessions(user_id,field,created_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET field=excluded.field,created_at=CURRENT_TIMESTAMP").bind(q.from.id,field).run();
   const hint=field==="text"
-    ?"متن کامل پیام /start را ارسال کن. بولد، ایتالیک، زیرخط، نقل‌قول، Spoiler، لینک‌های متصل به متن و ایموجی‌های پرمیوم حفظ می‌شوند. برای ساخت لینک روی واژه‌ها، متن را در تلگرام قالب‌بندی کن و همان پیام را بفرست. برای بازگشت به متن پیش‌فرض /reset بفرست."
+    ?"متن را به قالب Rich HTML تلگرام بفرست؛ مانند <mark>هایلایت</mark>، <a href=\\\"https://example.com\\\">لینک روی متن</a>، <h2>تیتر</h2> و <blockquote>نقل‌قول</blockquote>. دکمه‌های منو به‌صورت خودکار داخل Rich Message قرار می‌گیرند. برای بازگشت به متن پیش‌فرض /reset بفرست."
     :"عنوان جدید "+LABELS[field]+" را ارسال کن. می‌توانی یک ایموجی معمولی یا Custom Emoji در ابتدای عنوان قرار بدهی. حداکثر ۶۴ نویسه؛ برای بازگشت به عنوان پیش‌فرض /reset بفرست.";
   return out(await tg(e,"sendMessage",{chat_id:q.message.chat.id,text:"✏️ "+hint,reply_markup:{force_reply:true,selective:true}}));
 }
@@ -56,7 +56,7 @@ export async function handleStartMenuMessage(e,m){
   const session=await e.DB.prepare("SELECT field FROM bot_start_menu_sessions WHERE user_id=?").bind(m.from.id).first();
   if(!session?.field)return null;
   const field=String(session.field),raw=String(m.text??m.caption??""),trimmed=raw.trim();
-  if(!trimmed)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ پیام متنی خالی است؛ لطفاً متن را بفرست."}));
+  if(!trimmed)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ پیام متنی خالی است؛ لطفاً Rich HTML یا عنوان دکمه را بفرست."}));
   if(trimmed==="/reset"){
     if(field==="text")await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=NULL,start_entities='[]',updated_at=CURRENT_TIMESTAMP WHERE id=1").run();
     else await e.DB.prepare("UPDATE bot_start_menu_settings SET "+field+"_text=?, "+field+"_icon_custom_emoji_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1").bind(({library:"📚 کتابخانه Home",dossiers:"📜 فهرست پرونده‌های ثبت‌شده",about:"ℹ️ درباره ربات",guide:"📖 راهنما"})[field]).run();
@@ -64,9 +64,9 @@ export async function handleStartMenuMessage(e,m){
     return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"♻️ مقدار به حالت پیش‌فرض برگشت.",reply_markup:{inline_keyboard:[[{text:"🎛 بازگشت به تنظیمات منو",callback_data:"startmenu_open"}]]}}));
   }
   if(field==="text"){
-    const entities=Array.isArray(m.entities)?m.entities:(Array.isArray(m.caption_entities)?m.caption_entities:[]);
-    if(Array.from(trimmed).length>4096)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ متن از محدودیت ۴۰۹۶ نویسه بیشتر است."}));
-    await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=?,start_entities=?,updated_at=CURRENT_TIMESTAMP WHERE id=1").bind(raw,JSON.stringify(entities)).run();
+    const bytes=new TextEncoder().encode(raw).length;
+    if(bytes>32768)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ Rich Message حداکثر ۳۲٬۷۶۸ بایت UTF-8 است."}));
+    await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=?,start_entities='[]',updated_at=CURRENT_TIMESTAMP WHERE id=1").bind(raw).run();
   }else{
     const label=extractButtonLabel(m);
     const chars=Array.from(label.text).length;
@@ -90,7 +90,7 @@ export default {async fetch(req,e){
   if(d.startsWith("startmenu_edit:"))return beginEdit(e,q,d.split(":")[1]);
   if(d==="startmenu_preview"){
     const payload=await buildStartPayload(e,id);
-    const result=await tg(e,"sendMessage",{chat_id:q.message.chat.id,...payload});
+    const result=await tg(e,"sendRichMessage",{chat_id:q.message.chat.id,...payload});
     if(!result?.ok)console.error("[START_MENU_PREVIEW_SEND]",result?.description||result);
     return out(result);
   }
