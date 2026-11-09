@@ -6,14 +6,14 @@ const admin=(e,id)=>String(e.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Bo
 const STYLES=["default","primary","success","danger","link"];
 const STYLE_NAMES={default:"پیش‌فرض",primary:"اصلی",success:"سبز",danger:"قرمز",link:"لینکی"};
 const LABEL_NAMES={
- browse:"دکمهٔ مرور شاخه‌ها",sort:"دکمهٔ تغییر ترتیب",search:"دکمهٔ جست‌وجو",favorites:"دکمهٔ علاقه‌مندی‌ها",
+ browse:"دکمهٔ مرور شاخه‌ها",sort:"دکمهٔ تغییر ترتیب",appearance:"دکمهٔ تغییر ظاهر کتابخانه",search:"دکمهٔ جست‌وجو",favorites:"دکمهٔ علاقه‌مندی‌ها",
  hub_back:"بازگشت از صفحهٔ اصلی",tree_back:"بازگشت از فهرست شاخه‌ها",category_sort:"نحوهٔ نمایش در صفحهٔ دسته",
  category_back:"بازگشت از صفحهٔ دسته",add_favorites:"افزودن به علاقه‌مندی‌ها",save_selected:"ثبت منتخب‌ها",
  cancel_selected:"لغو انتخاب",favorites_back:"بازگشت از علاقه‌مندی‌ها",remove_favorite:"حذف از علاقه‌مندی‌ها",
- previous:"صفحهٔ قبل",next:"صفحهٔ بعد"
+ previous:"صفحهٔ قبل",next:"صفحهٔ بعد",previous_branches:"شاخه‌های قبل",next_branches:"شاخه‌های بعد"
 };
-const STYLE_NAMES_FA={browse:"مرور شاخه‌ها",sort:"تغییر ترتیب",search:"جست‌وجو",favorites:"علاقه‌مندی‌ها",back:"بازگشت",category:"دکمه‌های شاخه‌ها",post:"دکمه‌های پست‌ها",action:"عملیات معمولی",success:"عملیات تأیید",danger:"عملیات حذف/لغو",pagination:"صفحه‌بندی"};
-const STYLE_BINDINGS={browse:"browse",sort:"sort",search:"search",favorites:"favorites",hub_back:"back",tree_back:"back",tree_sort:"sort",category_sort:"sort",category:"category",post:"post",add_favorites:"action",save_selected:"success",cancel_selected:"danger",favorites_back:"back",remove_favorite:"danger",previous:"pagination",next:"pagination"};
+const STYLE_NAMES_FA={browse:"مرور شاخه‌ها",sort:"تغییر ترتیب",appearance:"تغییر ظاهر",search:"جست‌وجو",favorites:"علاقه‌مندی‌ها",back:"بازگشت",category:"دکمه‌های شاخه‌ها",post:"دکمه‌های پست‌ها",action:"عملیات معمولی",success:"عملیات تأیید",danger:"عملیات حذف/لغو",pagination:"صفحه‌بندی"};
+const STYLE_BINDINGS={browse:"browse",sort:"sort",appearance:"action",search:"search",favorites:"favorites",hub_back:"back",tree_back:"back",tree_sort:"sort",category_sort:"sort",category:"category",post:"post",add_favorites:"action",save_selected:"success",cancel_selected:"danger",favorites_back:"back",remove_favorite:"danger",previous:"pagination",next:"pagination",previous_branches:"pagination",next_branches:"pagination"};
 const iconText=(key,s)=>String(s?.[key+"_text"]??LIBRARY_UI_DEFAULTS[key+"_text"]??"");
 async function openSettings(e,q){
  const s=await getLibraryUISettings(e);
