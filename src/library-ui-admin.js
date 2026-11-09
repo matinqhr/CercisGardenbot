@@ -3,8 +3,8 @@ import {ensureLibraryUISettings,getLibraryUISettings,updateLibraryUISettings,res
 const tg=async(e,m,b={})=>(await fetch("https://api.telegram.org/bot"+e.BOT_TOKEN+"/"+m,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)})).json();
 const out=x=>new Response(JSON.stringify(x??{ok:true}),{status:200,headers:{"content-type":"application/json"}});
 const admin=(e,id)=>String(e.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean).includes(String(id));
-const STYLES=["default","primary","success","danger"];
-const STYLE_NAMES={default:"پیش‌فرض",primary:"اصلی",success:"سبز",danger:"قرمز"};
+const STYLES=["default","primary","success","danger","link"];
+const STYLE_NAMES={default:"پیش‌فرض",primary:"اصلی",success:"سبز",danger:"قرمز",link:"لینکی"};
 const LABEL_NAMES={
  browse:"دکمهٔ مرور شاخه‌ها",sort:"دکمهٔ تغییر ترتیب",search:"دکمهٔ جست‌وجو",favorites:"دکمهٔ علاقه‌مندی‌ها",
  hub_back:"بازگشت از صفحهٔ اصلی",tree_back:"بازگشت از فهرست شاخه‌ها",category_sort:"نحوهٔ نمایش در صفحهٔ دسته",
@@ -27,7 +27,7 @@ async function openSettings(e,q){
   [{text:"🔙 بازگشت به پنل مدیریت",callback_data:"panel"}]
  ];
  const text="🎨 <b>شخصی‌سازی کتابخانه</b>\n\n"+
-  "متن صفحهٔ اصلی و فهرست شاخه‌ها، عنوان دکمه‌ها و رنگ دکمه‌ها را از اینجا مدیریت کن. برای دو متن می‌توانی قالب‌بندی و لینک تلگرامی را با فرستادن یک پیام قالب‌بندی‌شده حفظ کنی.\n\n"+
+  "متن صفحهٔ اصلی و فهرست شاخه‌ها را با Rich HTML تلگرام ویرایش کن؛ هایلایت با <mark>، لینک روی متن با <a href='URL'>، تیتر، نقل‌قول و بخش‌های بازشونده پشتیبانی می‌شوند. دکمه‌ها داخل خود Rich Message قرار می‌گیرند.\\n\\n"+
   "<b>متن‌ها:</b>\n"+
   "صفحهٔ اصلی: "+(String(s.hub_text||"").trim()?"شخصی‌سازی‌شده":"پیش‌فرض")+"\n"+
   "فهرست شاخه‌ها: "+(String(s.tree_text||"").trim()?"شخصی‌سازی‌شده":"پیش‌فرض")+"\n\n"+
@@ -61,7 +61,7 @@ async function beginEdit(e,q,field){
  await e.DB.prepare("INSERT INTO bot_library_ui_sessions(user_id,field,created_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET field=excluded.field,created_at=CURRENT_TIMESTAMP").bind(q.from.id,field).run();
  const rich=field==="hub_text"||field==="tree_text";
  const hint=rich
-  ?"متن کامل را با قالب‌بندی تلگرام بفرست. Bold، Italic، زیرخط، نقل‌قول، Spoiler و لینک‌های متصل به متن همراه پیام ذخیره می‌شوند. برای بازگشت به متن پیش‌فرض /reset بفرست."
+  ?"کد Rich HTML را به‌صورت متن بفرست. نمونه: <mark>متن هایلایت‌شده</mark>، <a href='URL'>لینک روی واژه</a>، <h2>تیتر</h2>، <blockquote>نقل‌قول</blockquote> و <details><summary>بیشتر</summary>متن پنهان</details>. دکمه‌های کتابخانه خودکار زیر محتوا قرار می‌گیرند. برای بازگشت به پیش‌فرض /reset بفرست."
   :"عنوان تازهٔ "+(LABEL_NAMES[field]||"دکمه")+" را بفرست. حداکثر ۶۴ نویسه است؛ برای بازگشت به عنوان پیش‌فرض /reset بفرست.";
  return out(await tg(e,"sendMessage",{chat_id:q.message.chat.id,text:"✏️ "+hint,reply_markup:{force_reply:true,selective:true}}));
 }
@@ -87,9 +87,8 @@ export async function handleLibraryUIMessage(e,m){
   return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"♻️ مقدار به حالت پیش‌فرض برگشت.",reply_markup:{inline_keyboard:[[{text:"🎨 بازگشت به تنظیمات کتابخانه",callback_data:"libraryui_open"}]]}}));
  }
  if(rich){
-  if(Array.from(trimmed).length>4096)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ متن از محدودیت ۴۰۹۶ نویسه بیشتر است."}));
-  const entities=Array.isArray(m.entities)?m.entities:(Array.isArray(m.caption_entities)?m.caption_entities:[]);
-  await updateLibraryUISettings(e,{[field]:raw,[field.replace(/_text$/,"_entities")]:entities,[field.replace(/_text$/,"_custom")]:true});
+  if(new TextEncoder().encode(raw).length>32768)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ Rich Message حداکثر ۳۲٬۷۶۸ بایت UTF-8 است."}));
+  await updateLibraryUISettings(e,{[field]:raw,[field.replace(/_text$/,"_entities")]:[],[field.replace(/_text$/,"_custom")]:true});
  }else{
   const label=buttonLabel(m),length=Array.from(label.text).length;
   if(!label.text||length>64)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ عنوان دکمه باید بین ۱ تا ۶۴ نویسه باشد."}));
@@ -120,7 +119,7 @@ export default {async fetch(req,e){
  }
  if(d==="libraryui_preview"){
   const s=await getLibraryUISettings(e),payload=buildLibraryHomePreview(s);
-  const r=await tg(e,"sendMessage",{chat_id:q.message.chat.id,...payload});
+  const r=await tg(e,"sendRichMessage",{chat_id:q.message.chat.id,...payload});
   return out(r);
  }
  if(d==="libraryui_reset"){
