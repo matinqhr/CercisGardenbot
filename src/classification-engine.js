@@ -215,7 +215,7 @@ const publicTree=async(e,q)=>{
  const cs=await children(e,null,mode,seed);
  const buttons=cs.map(x=>[styleLibraryButton(ui,"category",{...categoryButton(x,"",mode==="count"?" ("+Number(x.n||0)+")":""),callback_data:"home_cat:"+x.id})]);
  if(!buttons.length)buttons.push([{text:String(ui.no_categories_text||"هنوز شاخه‌ای ثبت نشده است"),callback_data:"home_categories"}]);
- buttons.push([libraryButton(ui,"tree_sort",{text:String(ui.category_sort_text||"⚙️ نحوه نمایش"),callback_data:"home_sort"})]);
+ buttons.push([libraryButton(ui,"category_sort",{callback_data:"home_sort"})]);
  buttons.push([libraryButton(ui,"tree_back",{callback_data:"library_home"})]);
  return renderLibraryPage(e,q,libraryTextPayload(ui,"tree_text").rich_message.html,buttons);
 };
@@ -230,7 +230,7 @@ const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
  const order=mode==="random"?"((p.message_id * ((1103515245 + ((? % 2147483646) * 40699)) % 2147483647)) % 2147483647) ASC, p.message_id ASC":mode==="oldest"?"p.message_id ASC":"p.message_id DESC";
  const sql="SELECT DISTINCT p.message_id,p.url,p.title,p.title_emoji,p.title_emoji_id FROM home_archive_posts p JOIN home_post_paths pp ON pp.post_id=p.message_id JOIN home_post_path_nodes pn ON pn.path_id=pp.id WHERE pn.category_id=? AND COALESCE(p.status,'pending')!='deleted' AND NOT EXISTS (SELECT 1 FROM home_post_path_nodes next WHERE next.path_id=pn.path_id AND next.level>pn.level) ORDER BY "+order+" LIMIT ? OFFSET ?";
  const rows=(mode==="random"
-  ?(await e.DB.prepare(sql).bind(cid,seed,cid,limit+1,offset).all()).results||[]
+  ?(await e.DB.prepare(sql).bind(cid,seed,limit+1,offset).all()).results||[]
   :(await e.DB.prepare(sql).bind(cid,limit+1,offset).all()).results||[]);
  const hasNext=rows.length>limit;rows.splice(limit);
  const posts=[];for(const p of rows){const mark=await dossierMark(e,p.message_id);posts.push({...p,mark})}
