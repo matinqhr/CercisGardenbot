@@ -93,21 +93,10 @@ function normalizeRichInput(raw){
 export async function buildStartPayload(e,userId){
   const settings=await getStartMenuSettings(e);
   const libraryEnabled=await getLibraryEnabled(e);
-  const raw=String(settings?.start_text??"");
-  const rich=normalizeRichInput(raw);
-  const buttons=buildStartKeyboard(settings,libraryEnabled);
-  if(typeof rich.html==="string")rich.html=rich.html+"\n"+buttons;
-  else if(typeof rich.markdown==="string")rich.markdown=rich.markdown+"\n\n"+buttons;
-  else if(Array.isArray(rich.blocks)){
-    rich.blocks=[...rich.blocks,{type:"buttons",align:"center",buttons:[
-      ...(libraryEnabled?[{text:[{type:"text",text:String(settings?.library_text||DEFAULTS.library_text)}],callback_data:"library_home",style:"primary"}]:[]),
-      {text:[{type:"text",text:String(settings?.dossiers_text||DEFAULTS.dossiers_text)}],callback_data:"public_list",style:"success"},
-      {text:[{type:"text",text:String(settings?.about_text||DEFAULTS.about_text)}],callback_data:"about"},
-      {text:[{type:"text",text:String(settings?.guide_text||DEFAULTS.guide_text)}],callback_data:"help"}
-    ]}];
-  }else rich.html=defaultStartText()+"\n"+buttons;
+  const rich=normalizeRichInput(settings?.start_text);
+  rich.html=rich.html+"\\n"+buildStartKeyboard(settings,libraryEnabled);
   return {
-    rich_message:{...rich,is_rtl:true},
+    rich_message:rich,
     message_effect_id:"5159385139981059251"
   };
 }
