@@ -116,7 +116,7 @@ export function buildLibraryHomePreview(settings){
     [libraryButton(settings,"hub_back",{callback_data:"public_start"})]
   ];
   const rich=libraryTextPayload(settings,"hub_text");
-  rich.rich_message.html=(String(rich.rich_message?.html||"")+richButtonRows(rows));
+  rich.rich_message.html=String(rich.rich_message?.html||"")+"\\n"+richButtonRows(rows);
   return rich;
 }
 export const LIBRARY_UI_DEFAULTS=DEFAULTS;
