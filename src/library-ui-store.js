@@ -101,15 +101,16 @@ export function richButtonRows(rows=[]){
       return "";
     }).filter(Boolean).join("");
     return buttons?'<tg-button-row align="center">'+buttons+'</tg-button-row>':"";
-  }).filter(Boolean).join("\\n");
+  }).filter(Boolean).join("\n");
 }
 export function libraryButton(settings,key,extra={}){
   const labelKey=LABEL_BINDING[key]||key;
   const label=String(extra.text??settings?.[labelKey+"_text"]??DEFAULTS[labelKey+"_text"]??key).trim();
   const icon=settings?.[labelKey+"_icon_custom_emoji_id"];
+  const iconAlt=settings?.[labelKey+"_icon_custom_emoji_alt"];
   const styleKey=STYLE_BINDING[key]||key;
   const style=String(settings?.[styleKey+"_style"]??DEFAULTS[styleKey+"_style"]??"default");
-  return {text:label,...(icon?{icon_custom_emoji_id:String(icon)}:{}),...(ALLOWED_STYLES.has(style)&&style!=="default"?{style}:{}),...extra};
+  return {text:label,...(icon?{icon_custom_emoji_id:String(icon),rich_custom_emoji_alt:String(iconAlt||"🌿")} :{}),...(ALLOWED_STYLES.has(style)&&style!=="default"?{style}:{}),...extra};
 }
 export function styleLibraryButton(settings,styleKey,button){
   const style=String(settings?.[styleKey+"_style"]??DEFAULTS[styleKey+"_style"]??"default");
