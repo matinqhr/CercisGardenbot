@@ -339,7 +339,14 @@ const favoriteCancel=async(e,q,cid,page,subPage)=>{
 export default{async fetch(req,e){
  let u;try{u=await req.clone().json()}catch{return out({ok:true})}
  const q=u.callback_query,m=u.message,id=q?.from?.id||m?.from?.id,d=String(q?.data||"");await ensure(e);
- if(q&&(d==="library_home"||d==="home_categories"||d.startsWith("home_cat:")||d.startsWith("home_cat_page:")||d.startsWith("home_cat_sub_page:")||d==="home_sort"||d==="home_sort_home"||d.startsWith("home_sort:")||d.startsWith("home_sort_set:")||d.startsWith("home_sort_shuffle:")||d.startsWith("fav_")||d.startsWith("favorites:"))){
+ if(q&&(d==="home_appearance_toggle"||d==="library_home"||d==="home_categories"||d.startsWith("home_cat:")||d.startsWith("home_cat_page:")||d.startsWith("home_cat_sub_page:")||d==="home_sort"||d==="home_sort_home"||d.startsWith("home_sort:")||d.startsWith("home_sort_set:")||d.startsWith("home_sort_shuffle:")||d.startsWith("fav_")||d.startsWith("favorites:"))){
+  if(d==="home_appearance_toggle"){
+   const current=await e.DB.prepare("SELECT display_mode FROM user_library_preferences WHERE user_id=?").bind(id).first();
+   const next=String(current?.display_mode||"rich")==="glass"?"rich":"glass";
+   await e.DB.prepare("INSERT INTO user_library_preferences(user_id,display_mode,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET display_mode=excluded.display_mode,updated_at=CURRENT_TIMESTAMP").bind(id,next).run();
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:next==="glass"?"ظاهر کتابخانه به دکمه‌های شیشه‌ای تغییر کرد.":"ظاهر کتابخانه به Rich Message تغییر کرد."});
+   return libraryHome(e,q);
+  }
   if(d==="library_home"){
    const s=await setting(e);
    if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً غیرفعال است.",show_alert:true}));
