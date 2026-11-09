@@ -41,16 +41,18 @@ async function answerInline(e,iq){
     return best;
    };
    const ranked=rows.map(r=>{
-    const categories=norm(r.categories),keywords=norm(r.keywords);
-    const categoryHits=countHits(categories,searchTerms),keywordHits=countHits(keywords,searchTerms);
-    const covered=new Set(searchTerms.filter(t=>categories.includes(t)||keywords.includes(t))).size;
-    let score=categoryHits*32+keywordHits*28;
+    const title=norm(r.title),keywords=norm(r.keywords),categories=norm(r.categories);
+    const titleHits=countHits(title,searchTerms),keywordHits=countHits(keywords,searchTerms),categoryHits=countHits(categories,searchTerms);
+    const covered=new Set(searchTerms.filter(t=>title.includes(t)||keywords.includes(t)||categories.includes(t))).size;
+    let score=titleHits*110+keywordHits*32+categoryHits*16;
     score+=(searchTerms.length?covered/searchTerms.length*45:0);
-    if(phrase&&categories.includes(phrase))score+=180;
-    else score+=phraseBoost(categories,searchTerms,55,18);
-    if(phrase&&keywords.includes(phrase))score+=160;
-    else score+=phraseBoost(keywords,searchTerms,50,16);
-    if(searchTerms.length>1&&covered===searchTerms.length)score+=50;
+    if(phrase&&title.includes(phrase))score+=360;
+    else score+=phraseBoost(title,searchTerms,120,30);
+    if(phrase&&keywords.includes(phrase))score+=130;
+    else score+=phraseBoost(keywords,searchTerms,65,20);
+    if(phrase&&categories.includes(phrase))score+=65;
+    else score+=phraseBoost(categories,searchTerms,35,12);
+    if(searchTerms.length>1&&covered===searchTerms.length)score+=40;
     return {...r,score};
    }).filter(r=>r.score>0);
    ranked.sort((a,b)=>b.score-a.score||Number(a.message_id)-Number(b.message_id));
