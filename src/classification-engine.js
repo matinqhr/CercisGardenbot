@@ -16,6 +16,42 @@ const withRichButtons=(rich,rows)=>{
  return rich;
 };
 
+const brandHomeHtml=value=>String(value??"").replace(/(<[^>]*>)|([^<]+)/g,(_,tag,text)=>tag||text.replace(/\bHome\b/g,"𝐇𝐨𝐦𝐞"));
+const standardLibraryHtml=value=>brandHomeHtml(value)
+ .replace(/<tg-emoji\b[^>]*>([\s\S]*?)<\/tg-emoji>/gi,"$1")
+ .replace(/<br\s*\/?>/gi,"\n")
+ .replace(/<p\b[^>]*>/gi,"\n").replace(/<\/p>/gi,"\n")
+ .replace(/<h[1-6]\b[^>]*>/gi,"<b>").replace(/<\/h[1-6]>/gi,"</b>\n")
+ .replace(/<mark\b[^>]*>/gi,"<u>").replace(/<\/mark>/gi,"</u>")
+ .replace(/<summary\b[^>]*>/gi,"<b>").replace(/<\/summary>/gi,"</b>")
+ .replace(/<\/?details\b[^>]*>/gi,"")
+ .replace(/\n{3,}/g,"\n\n").trim();
+const standardLibraryButtons=rows=>(Array.isArray(rows)?rows:[]).map(row=>(Array.isArray(row)?row:[]).map(button=>{
+ const label=String(button?.text||"");
+ const alt=button?.icon_custom_emoji_id?String(button?.rich_custom_emoji_alt||""):"";
+ const text=(alt&&!label.startsWith(alt)?alt+" ":"")+label;
+ const result={text:Array.from(text).slice(0,64).join("")};
+ for(const key of ["callback_data","url","switch_inline_query","switch_inline_query_current_chat","switch_inline_query_chosen_chat","web_app","login_url","copy_text","callback_game","pay"]){
+  if(button?.[key]!==undefined)result[key]=button[key];
+ }
+ return result;
+})).filter(row=>row.length);
+const renderLibraryPage=async(e,q,html,buttons)=>{
+ const pref=await e.DB.prepare("SELECT display_mode FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();
+ const mode=String(pref?.display_mode||"rich")==="glass"?"glass":"rich";
+ const body=brandHomeHtml(html),chatId=q.message.chat.id,messageId=q.message.message_id;
+ if(mode==="glass"){
+  const text=standardLibraryHtml(body),reply_markup={inline_keyboard:standardLibraryButtons(buttons)};
+  const edited=await tg(e,"editMessageText",{chat_id:chatId,message_id:messageId,text,parse_mode:"HTML",reply_markup});
+  if(edited?.ok||String(edited?.description||"").toLowerCase().includes("message is not modified"))return out(edited);
+  const sent=await tg(e,"sendMessage",{chat_id:chatId,text,parse_mode:"HTML",reply_markup});
+  if(sent?.ok){await tg(e,"deleteMessage",{chat_id:chatId,message_id:messageId});return out(sent);}
+  return out(edited);
+ }
+ const rich={html:body+richButtonRows(buttons),is_rtl:true};
+ return out(await tg(e,"editMessageText",{chat_id:chatId,message_id:messageId,rich_message:rich}));
+};
+
 let schemaReady=false;
 let schemaPromise=null;
 const ensure=async e=>{
@@ -53,8 +89,9 @@ const ensure=async e=>{
  stage="classification_settings table";
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS classification_settings(id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER NOT NULL DEFAULT 1,library_enabled INTEGER NOT NULL DEFAULT 0,next_message_id INTEGER NOT NULL DEFAULT 1,last_message_id INTEGER NOT NULL DEFAULT 0)").run();
  stage="user_library_preferences table";
- await e.DB.prepare("CREATE TABLE IF NOT EXISTS user_library_preferences(user_id INTEGER PRIMARY KEY,sort_mode TEXT NOT NULL DEFAULT 'cercis',updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
+ await e.DB.prepare("CREATE TABLE IF NOT EXISTS user_library_preferences(user_id INTEGER PRIMARY KEY,sort_mode TEXT NOT NULL DEFAULT 'cercis',display_mode TEXT NOT NULL DEFAULT 'rich',updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
  try{await e.DB.prepare("ALTER TABLE user_library_preferences ADD COLUMN random_seed INTEGER NOT NULL DEFAULT 1").run()}catch{}
+ try{await e.DB.prepare("ALTER TABLE user_library_preferences ADD COLUMN display_mode TEXT NOT NULL DEFAULT 'rich'").run()}catch{}
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS user_library_favorites(user_id INTEGER NOT NULL,post_id INTEGER NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,post_id))").run();
  await e.DB.prepare("CREATE INDEX IF NOT EXISTS user_library_favorites_order ON user_library_favorites(user_id,created_at,post_id)").run();
  await e.DB.prepare("CREATE TABLE IF NOT EXISTS user_library_selection_sessions(user_id INTEGER PRIMARY KEY,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
@@ -156,12 +193,12 @@ const libraryHome=async(e,q)=>{
  const ui=await getLibraryUISettings(e);
  const buttons=[
   [libraryButton(ui,"browse",{callback_data:"home_categories"})],
-  [libraryButton(ui,"hub_sort",{callback_data:"home_sort_home"})],
-  [libraryButton(ui,"search",{switch_inline_query_current_chat:""}),libraryButton(ui,"favorites",{callback_data:"favorites:0"})],
+  [libraryButton(ui,"hub_sort",{callback_data:"home_sort_home"}),libraryButton(ui,"appearance",{callback_data:"home_appearance_toggle"})],
+  [libraryButton(ui,"search",{switch_inline_query_current_chat:""})],
+  [libraryButton(ui,"favorites",{callback_data:"favorites:0"})],
   [libraryButton(ui,"hub_back",{callback_data:"public_start"})]
  ];
- const rich=withRichButtons(libraryTextPayload(ui,"hub_text").rich_message,buttons);
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,rich_message:rich}));
+ return renderLibraryPage(e,q,libraryTextPayload(ui,"hub_text").rich_message.html,buttons);
 };
 
 const publicTree=async(e,q)=>{
@@ -174,8 +211,7 @@ const publicTree=async(e,q)=>{
  if(!buttons.length)buttons.push([{text:String(ui.no_categories_text||"هنوز شاخه‌ای ثبت نشده است"),callback_data:"home_categories"}]);
  buttons.push([libraryButton(ui,"tree_sort",{text:String(ui.category_sort_text||"⚙️ نحوه نمایش"),callback_data:"home_sort"})]);
  buttons.push([libraryButton(ui,"tree_back",{callback_data:"library_home"})]);
- const rich=withRichButtons(libraryTextPayload(ui,"tree_text").rich_message,buttons);
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,rich_message:rich}));
+ return renderLibraryPage(e,q,libraryTextPayload(ui,"tree_text").rich_message.html,buttons);
 };
 
 const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
