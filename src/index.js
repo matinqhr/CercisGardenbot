@@ -18,7 +18,56 @@ async function requestInfo(e,q){const c=q.message.chat.id,id=q.from.id,s=await e
 async function createInfoRequest(e,q,channel,postId){const c=q.message.chat.id,id=q.from.id;const old=await e.DB.prepare("SELECT * FROM information_requests WHERE user_id=? AND channel=? AND post_id=? AND status='pending' LIMIT 1").bind(id,String(channel),Number(postId)).first();if(old)return send(e,c,"📩 درخواست شما برای این پست قبلاً ثبت شده است.\n\nپس از ثبت اطلاعات، به همین پیام اطلاع داده خواهد شد.");await e.DB.prepare("INSERT INTO information_requests(user_id,channel,post_id,request_chat_id,request_message_id,status,created_at) VALUES(?,?,?,?,?,? ,CURRENT_TIMESTAMP)").bind(id,String(channel),Number(postId),String(c),Number(q.message.reply_to_message?.message_id||0),"pending").run();await notifyAdmins(e,channel,postId);return send(e,c,"✅ درخواست شما ثبت شد.\n\nاگر اطلاعات این پست ثبت شود، به همین پیام اطلاع داده خواهد شد.")}
 async function resolveInfoRequests(e,channel,postId){const rows=(await e.DB.prepare("SELECT id,user_id,request_chat_id,request_message_id FROM information_requests WHERE channel=? AND post_id=? AND status='pending'").bind(String(channel),Number(postId)).all()).results||[];for(const r of rows){const x=await send(e,Number(r.request_chat_id),"✅ <b>اطلاعات پست موردنظر شما ثبت شد.</b>\n\nلطفاً یک بار دیگر پست را برای سرسیس فروارد کنید.",{reply_to_message_id:Number(r.request_message_id)});if(x?.ok)await e.DB.prepare("UPDATE information_requests SET status='done',resolved_at=CURRENT_TIMESTAMP WHERE id=?").bind(r.id).run()}}
 async function ensureSchema(e){await e.DB.prepare(`CREATE TABLE IF NOT EXISTS tracks(id INTEGER PRIMARY KEY AUTOINCREMENT,channel TEXT NOT NULL,post_id INTEGER NOT NULL,url TEXT NOT NULL UNIQUE,title TEXT,artist TEXT,release_date TEXT,lyrics TEXT,description TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();await e.DB.prepare(`CREATE TABLE IF NOT EXISTS sessions(user_id INTEGER PRIMARY KEY,step TEXT NOT NULL,channel TEXT,post_id INTEGER,url TEXT,draft TEXT,updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();await e.DB.prepare(`CREATE TABLE IF NOT EXISTS users(user_id INTEGER PRIMARY KEY,created_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();await e.DB.prepare(`CREATE TABLE IF NOT EXISTS improvement_ideas(id INTEGER PRIMARY KEY AUTOINCREMENT,text TEXT NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP)`).run();await e.DB.prepare(`CREATE TABLE IF NOT EXISTS usage_stats(key TEXT PRIMARY KEY,count INTEGER NOT NULL DEFAULT 0)`).run();await e.DB.prepare(`CREATE TABLE IF NOT EXISTS information_requests(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,channel TEXT NOT NULL,post_id INTEGER NOT NULL,request_chat_id TEXT NOT NULL,request_message_id INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'pending',created_at TEXT DEFAULT CURRENT_TIMESTAMP,resolved_at TEXT)`).run();const c=await e.DB.prepare("PRAGMA table_info(tracks)").all(),n=new Set((c.results||[]).map(x=>x.name));for(const [a,b] of [["content_type","TEXT"],["details","TEXT"],["details2","TEXT"],["media_file_id","TEXT"],["media_caption","TEXT"]])if(!n.has(a))await e.DB.prepare(`ALTER TABLE tracks ADD COLUMN ${a} ${b}`).run();const i=await e.DB.prepare("PRAGMA table_info(improvement_ideas)").all(),z=new Set((i.results||[]).map(x=>x.name));if(!z.has("status"))await e.DB.prepare("ALTER TABLE improvement_ideas ADD COLUMN status TEXT DEFAULT 'backlog'").run()}
-async function answerInline(e,iq){const query=String(iq?.query||"").trim();if(!iq?.id)return new Response("ok");let results=[];if(query){const norm=v=>String(v||"").toLocaleLowerCase("fa").replace(/ي/g,"ی").replace(/ك/g,"ک").replace(/[‌ـ]/g," ").replace(/\s+/g," ").trim();const terms=[...new Set(norm(query).split(" ").filter(Boolean))].slice(0,6);try{const rows=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE(GROUP_CONCAT(k.keyword,' '),'') keywords FROM home_archive_posts p LEFT JOIN home_post_keywords k ON k.post_id=p.message_id WHERE p.status!='deleted' GROUP BY p.message_id ORDER BY p.message_id DESC LIMIT 5000").all()).results||[];results=rows.map(r=>({...r,hay:norm([r.title,r.keywords].join(" "))})).filter(r=>terms.every(t=>r.hay.includes(t))).slice(0,30).map(r=>({type:"article",id:String(r.message_id),title:String(r.title||("پست #"+r.message_id)).slice(0,256),description:String(r.keywords||"پست آرشیو Home").slice(0,256),input_message_content:{message_text:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))},reply_markup:{inline_keyboard:[[{text:"باز کردن پست اصلی",url:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))}]]}}));}catch(err){console.error("[INLINE_SEARCH]",err)}}const response=await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results,cache_time:0,is_personal:true});if(!response?.ok)console.error("[INLINE_SEARCH_TELEGRAM]",JSON.stringify(response));return new Response(JSON.stringify(response),{status:200,headers:{"content-type":"application/json"}})}
+async function answerInline(e,iq){
+ const query=String(iq?.query||"").trim();
+ if(!iq?.id)return new Response("ok");
+ let results=[];
+ if(query){
+  const norm=v=>String(v||"").toLocaleLowerCase("fa").replace(/ي/g,"ی").replace(/ك/g,"ک").replace(/[\u200c\u0640]/g," ").replace(/[\u064b-\u065f\u0670]/g,"").replace(/[^\p{L}\p{N}]+/gu," ").replace(/\s+/g," ").trim();
+  const allTerms=[...new Set(norm(query).split(" ").filter(Boolean))].slice(0,12);
+  const stopWords=new Set(["رو","را","میخوام","میخواهم","میخایم","میخواهیم","میخواستم","میخواستی","لطفا","لطفاً","پیدا","کن","بکن","برام","برایم","میشه"]);
+  const terms=allTerms.filter(t=>!stopWords.has(t));
+  const searchTerms=terms.length?terms:allTerms;
+  const phrase=searchTerms.join(" ");
+  const ftsTerms=[...new Set(searchTerms.filter(t=>Array.from(t).length>=3))].slice(0,10);
+  let rows=[];
+  if(ftsTerms.length){
+   const match=ftsTerms.map(t=>'"'+t.replaceAll('"','""')+'"').join(" OR ");
+   try{
+    rows=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE((SELECT GROUP_CONCAT(k.keyword,' ') FROM home_post_keywords k WHERE k.post_id=p.message_id),'') keywords,COALESCE(o.overview,'') overview,bm25(home_search_fts) fts_rank FROM home_search_fts JOIN home_archive_posts p ON p.message_id=home_search_fts.rowid LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE home_search_fts MATCH ? AND COALESCE(p.status,'')!='deleted' ORDER BY bm25(home_search_fts) ASC LIMIT 3000").bind(match).all()).results||[];
+   }catch(err){console.error("[INLINE_SEARCH_FTS]",err)}
+  }
+  if(!rows.length){
+   rows=(await e.DB.prepare("SELECT p.message_id,p.title,p.url,COALESCE((SELECT GROUP_CONCAT(k.keyword,' ') FROM home_post_keywords k WHERE k.post_id=p.message_id),'') keywords,COALESCE(o.overview,'') overview,0 fts_rank FROM home_archive_posts p LEFT JOIN home_post_overviews o ON o.post_id=p.message_id WHERE COALESCE(p.status,'')!='deleted' ORDER BY p.message_id DESC LIMIT 5000").all()).results||[];
+  }
+  const countHits=(text,words)=>words.reduce((n,t)=>n+(text.includes(t)?1:0),0);
+  const phraseBoost=(text,words,base,perWord)=>{
+   let best=0;
+   for(let i=0;i<words.length;i++)for(let j=words.length;j>i+1;j--){
+    const part=words.slice(i,j).join(" ");
+    if(part.length>=4&&text.includes(part))best=Math.max(best,base+(j-i)*perWord);
+   }
+   return best;
+  };
+  const ranked=rows.map(r=>{
+   const title=norm(r.title),keywords=norm(r.keywords),overview=norm(r.overview);
+   const titleHits=countHits(title,searchTerms),keywordHits=countHits(keywords,searchTerms),overviewHits=countHits(overview,searchTerms);
+   let score=titleHits*34+(searchTerms.length?titleHits/searchTerms.length*40:0)+keywordHits*13+(searchTerms.length?keywordHits/searchTerms.length*12:0)+overviewHits*4;
+   if(phrase&&title.includes(phrase))score+=240;
+   else score+=phraseBoost(title,searchTerms,70,22);
+   if(phrase&&keywords.includes(phrase))score+=95;
+   else score+=phraseBoost(keywords,searchTerms,40,14);
+   score+=phraseBoost(overview,searchTerms,20,7);
+   if(searchTerms.length>1&&titleHits===searchTerms.length)score+=45;
+   return {...r,score};
+  }).filter(r=>r.score>0);
+  ranked.sort((a,b)=>b.score-a.score||Number(a.fts_rank||0)-Number(b.fts_rank||0)||Number(a.message_id)-Number(b.message_id));
+  results=ranked.slice(0,50).map(r=>({type:"article",id:String(r.message_id),title:String(r.title||("پست #"+r.message_id)).slice(0,256),description:String(r.keywords||"پست آرشیو Home").slice(0,256),input_message_content:{message_text:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))},reply_markup:{inline_keyboard:[[{text:"باز کردن پست اصلی",url:String(r.url||("https://t.me/Arghavanplaylistt/"+r.message_id))}]]}}));
+ }
+ const response=await tg(e,"answerInlineQuery",{inline_query_id:iq.id,results,cache_time:0,is_personal:true});
+ if(!response?.ok)console.error("[INLINE_SEARCH_TELEGRAM]",JSON.stringify(response));
+ return new Response(JSON.stringify(response),{status:200,headers:{"content-type":"application/json"}});
+}
 function parseForm(t=""){const raw=String(t).replaceAll("\r\n","\n").trim(),f={title:[],artist:[],content_type:[],details:[],details2:[],lyrics:[],description:[]},labels=[["🏷️","title"],["🏷","title"],["🎹","artist"],["🗂️","content_type"],["🗂","content_type"],["📂","content_type"],["📋","details"],["📌","details2"],["✏️","lyrics"],["✏","lyrics"],["📝","description"]];let cur=null,u=[];for(const x of raw.split("\n")){const l=x.trim();if(!l){if(cur)f[cur].push("");continue}const h=labels.find(([a])=>l.startsWith(a));if(h){cur=h[1];let v=l.slice(h[0].length).trim();const rm={title:["عنوان پست"],artist:["هنرمند","هنرمند / سازنده"],content_type:["نوع محتوا","مجموعه / آلبوم"],details:["اطلاعات","اطلاعات اصلی"],details2:["اطلاعات تکمیلی","لقمه دوم"],lyrics:["متن","متن یا اطلاعات تکمیلی"],description:["توضیحات"]}[cur]||[];for(const q of rm)if(v.startsWith(q)){v=v.slice(q.length).replace(/^[:：]/,"").trim();break}if(v)f[cur].push(v);continue}if(cur)f[cur].push(l);else u.push(l)}const r=Object.fromEntries(Object.entries(f).map(([k,v])=>[k,v.join("\n").trim()]));if(u.length)r.details=[r.details,...u].filter(Boolean).join("\n");if(!r.title)r.title=raw.split("\n").map(x=>x.trim()).find(Boolean)||"";return r}
 function parsePart(x){const id=x?.media_file_id||null;return{text:String(x?.text||"").trim(),caption:String(x?.caption||"").trim(),entities:Array.isArray(x?.entities)?x.entities:[],caption_entities:Array.isArray(x?.caption_entities)?x.caption_entities:[],media_type:x?.media_type||(id?"photo":null),media_file_id:id}}
 const encodeParts=p=>JSON.stringify(p.map(parsePart));
