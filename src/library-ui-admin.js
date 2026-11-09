@@ -13,14 +13,14 @@ const LABEL_NAMES={
  previous:"صفحهٔ قبل",next:"صفحهٔ بعد",previous_branches:"شاخه‌های قبل",next_branches:"شاخه‌های بعد"
 };
 const STYLE_NAMES_FA={browse:"مرور شاخه‌ها",sort:"تغییر ترتیب",appearance:"تغییر ظاهر",search:"جست‌وجو",favorites:"علاقه‌مندی‌ها",back:"بازگشت",category:"دکمه‌های شاخه‌ها",post:"دکمه‌های پست‌ها",action:"عملیات معمولی",success:"عملیات تأیید",danger:"عملیات حذف/لغو",pagination:"صفحه‌بندی"};
-const STYLE_BINDINGS={browse:"browse",sort:"sort",appearance:"action",search:"search",favorites:"favorites",hub_back:"back",tree_back:"back",tree_sort:"sort",category_sort:"sort",category:"category",post:"post",add_favorites:"action",save_selected:"success",cancel_selected:"danger",favorites_back:"back",remove_favorite:"danger",previous:"pagination",next:"pagination",previous_branches:"pagination",next_branches:"pagination"};
+const STYLE_BINDINGS={browse:"browse",sort:"sort",appearance:"action",search:"search",favorites:"favorites",hub_back:"back",tree_back:"back",tree_sort:"sort",category_sort:"success",category:"category",post:"post",add_favorites:"danger",save_selected:"success",cancel_selected:"danger",favorites_back:"back",remove_favorite:"danger",previous:"pagination",next:"pagination",previous_branches:"pagination",next_branches:"pagination"};
 const iconText=(key,s)=>String(s?.[key+"_text"]??LIBRARY_UI_DEFAULTS[key+"_text"]??"");
 async function openSettings(e,q){
  const s=await getLibraryUISettings(e);
  const rows=[
   [{text:"✏️ متن صفحهٔ اصلی کتابخانه",callback_data:"libraryui_edit:hub_text",style:"primary"}],
   [{text:"✏️ متن فهرست شاخه‌ها",callback_data:"libraryui_edit:tree_text"}],
-  [{text:"🔤 تغییر عنوان دکمه‌ها",callback_data:"libraryui_labels"}],
+  [{text:"🔤 تغییر عنوان دکمه‌ها",callback_data:"libraryui_labels"}],\n  [{text:"✏️ نام دکمهٔ تغییر ظاهر کتابخانه",callback_data:"libraryui_edit:appearance"}],
   [{text:"🎨 رنگ‌بندی دکمه‌ها",callback_data:"libraryui_styles"}],
   [{text:"👁 پیش‌نمایش کتابخانه",callback_data:"libraryui_preview",style:"success"}],
   [{text:"♻️ بازنشانی ظاهر کتابخانه",callback_data:"libraryui_reset",style:"danger"}],
