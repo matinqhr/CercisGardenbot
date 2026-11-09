@@ -88,10 +88,9 @@ export function buildStartKeyboard(settings,libraryEnabled){
   const library=startButton(settings,"library","library_home",libraryEnabled);
   if(library)rows.push([library]);
   rows.push([startButton(settings,"dossiers","public_list",libraryEnabled)]);
-  rows.push([
-    startButton(settings,"about","about",libraryEnabled),
-    startButton(settings,"guide","help",libraryEnabled)
-  ]);
+  const guide=startButton(settings,"guide","help",libraryEnabled);
+  if(guide){delete guide.callback_data;guide.url="https://telegra.ph/Cercis-08-27";}
+  rows.push([startButton(settings,"about","about",libraryEnabled),guide]);
   return {inline_keyboard:rows.map(row=>row.filter(Boolean))};
 }
 
