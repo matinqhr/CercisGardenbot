@@ -143,7 +143,7 @@ const treePrompt=async(e,q,step,cid,draft={})=>{await e.DB.prepare("INSERT INTO 
 
 const libraryHome=async(e,q)=>{
  const s=await setting(e);
- if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));
+ if(!Number(s.library_enabled))return out({ok:true});
  const text="🗂 <b>کتابخانه Home</b>\n\nدر این بخش می‌توانی شاخه‌های آرشیو را مرور کنی، ترتیب نمایش را تغییر بدهی، در پست‌ها جست‌وجو کنی و پست‌های دلخواهت را در فهرست علاقه‌مندی‌ها نگه داری.";
  const keyboard={inline_keyboard:[
   [{text:"🗂 مرور شاخه‌های کتابخانه",callback_data:"home_categories",style:"primary"}],
@@ -260,9 +260,9 @@ const favoriteBegin=async(e,q,cid,page,subPage)=>{
 };
 const favoriteToggle=async(e,q,cid,page,subPage,postId)=>{
  const active=await e.DB.prepare("SELECT 1 present FROM user_library_selection_sessions WHERE user_id=?").bind(q.from.id).first();
- if(!active)return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"حالت انتخاب فعال نیست.",show_alert:true}));
+ if(!active)return publicCategory(e,q,cid,page,subPage);
  const valid=await e.DB.prepare("SELECT 1 present FROM home_archive_posts p JOIN home_post_paths pp ON pp.post_id=p.message_id JOIN home_post_path_nodes pn ON pn.path_id=pp.id WHERE p.message_id=? AND pn.category_id=? AND COALESCE(p.status,'pending')!='deleted' AND NOT EXISTS (SELECT 1 FROM home_post_path_nodes next WHERE next.path_id=pn.path_id AND next.level>pn.level) LIMIT 1").bind(postId,cid).first();
- if(!valid)return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"این پست در این فهرست در دسترس نیست.",show_alert:true}));
+ if(!valid)return publicCategory(e,q,cid,page,subPage);
  const exists=await e.DB.prepare("SELECT 1 present FROM user_library_selection_items WHERE user_id=? AND post_id=?").bind(q.from.id,postId).first();
  if(exists)await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=? AND post_id=?").bind(q.from.id,postId).run();
  else await e.DB.prepare("INSERT OR IGNORE INTO user_library_selection_items(user_id,post_id) VALUES(?,?)").bind(q.from.id,postId).run();
@@ -270,7 +270,7 @@ const favoriteToggle=async(e,q,cid,page,subPage,postId)=>{
 };
 const favoriteSave=async(e,q,cid,page,subPage)=>{
  const count=await e.DB.prepare("SELECT COUNT(*) n FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).first();
- if(!Number(count?.n||0))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"هنوز پستی انتخاب نشده است.",show_alert:true}));
+ if(!Number(count?.n||0))return publicCategory(e,q,cid,page,subPage);
  await e.DB.prepare("INSERT OR IGNORE INTO user_library_favorites(user_id,post_id) SELECT user_id,post_id FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).run();
  await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).run();
  await e.DB.prepare("DELETE FROM user_library_selection_sessions WHERE user_id=?").bind(q.from.id).run();
@@ -306,7 +306,7 @@ export default{async fetch(req,e){
    const seed=mode==="random"?(Math.floor(Math.random()*2147483000)+1):(Number(old?.random_seed)||1);
    await e.DB.prepare("INSERT INTO user_library_preferences(user_id,sort_mode,random_seed,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET sort_mode=excluded.sort_mode,random_seed=excluded.random_seed,updated_at=CURRENT_TIMESTAMP").bind(id,mode,seed).run();
    await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"نحوه نمایش ذخیره شد."});
-   if(returnTo==="hub")return libraryHome(e,q);
+   if(returnTo==="hub")return libraryHome(e,q,true);
    return target?publicCategory(e,q,target,0):publicTree(e,q);
   }
   if(d.startsWith("home_sort_shuffle:")){
