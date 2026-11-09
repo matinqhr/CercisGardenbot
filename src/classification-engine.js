@@ -155,12 +155,12 @@ const libraryHome=async(e,q)=>{
 };
 
 const publicTree=async(e,q)=>{
- const s=await setting(e);if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));
+ const s=await setting(e);if(!Number(s.library_enabled))return out({ok:true});
  const pref=await e.DB.prepare("SELECT sort_mode,random_seed FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();
  const mode=String(pref?.sort_mode||"cercis"),seed=Number(pref?.random_seed)||1;
  const cs=await children(e,null,mode,seed);
  const buttons=cs.map(c=>[{...categoryButton(c,"",mode==="count"?" ("+Number(c.n||0)+")":""),callback_data:"home_cat:"+c.id}]);
- if(!buttons.length)buttons.push([{text:"هنوز شاخه‌ای ثبت نشده است",callback_data:"home_noop"}]);
+ if(!buttons.length)buttons.push([{text:"هنوز شاخه‌ای ثبت نشده است",callback_data:"home_categories"}]);
  buttons.push([{text:"⚙️ نحوه نمایش",callback_data:"home_sort"}]);
  buttons.push([{text:"🔙 بازگشت به کتابخانه",callback_data:"library_home"}]);
  return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🗂 <b>شاخه‌های کتابخانه Home</b>\n\nیک شاخه را برای مرور پست‌ها انتخاب کن:",parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
@@ -274,13 +274,11 @@ const favoriteSave=async(e,q,cid,page,subPage)=>{
  await e.DB.prepare("INSERT OR IGNORE INTO user_library_favorites(user_id,post_id) SELECT user_id,post_id FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).run();
  await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).run();
  await e.DB.prepare("DELETE FROM user_library_selection_sessions WHERE user_id=?").bind(q.from.id).run();
- await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:Number(count.n)+" پست به علاقه‌مندی‌ها اضافه شد."});
  return publicCategory(e,q,cid,page,subPage);
 };
 const favoriteCancel=async(e,q,cid,page,subPage)=>{
  await e.DB.prepare("DELETE FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).run();
  await e.DB.prepare("DELETE FROM user_library_selection_sessions WHERE user_id=?").bind(q.from.id).run();
- await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"انتخاب لغو شد."});
  return publicCategory(e,q,cid,page,subPage);
 };
 
@@ -290,7 +288,12 @@ export default{async fetch(req,e){
  let u;try{u=await req.clone().json()}catch{return out({ok:true})}
  const q=u.callback_query,m=u.message,id=q?.from?.id||m?.from?.id,d=String(q?.data||"");await ensure(e);
  if(q&&(d==="library_home"||d==="home_categories"||d.startsWith("home_cat:")||d.startsWith("home_cat_page:")||d.startsWith("home_cat_sub_page:")||d==="home_sort"||d==="home_sort_home"||d.startsWith("home_sort:")||d.startsWith("home_sort_set:")||d.startsWith("home_sort_shuffle:")||d.startsWith("fav_")||d.startsWith("favorites:"))){
-  if(d==="library_home")return libraryHome(e,q);
+  if(d==="library_home"){
+   const s=await setting(e);
+   if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً غیرفعال است.",show_alert:true}));
+   await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
+   return libraryHome(e,q);
+  }
   if(d==="home_sort"||d.startsWith("home_sort:")){
    await tg(e,"answerCallbackQuery",{callback_query_id:q.id});
    return sortMenu(e,q,d==="home_sort"?0:d.split(":")[1],"category");
