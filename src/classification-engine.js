@@ -141,10 +141,31 @@ const treeRoot=async(e,q,page=0)=>{const cs=await children(e,null),pages=Math.ma
 const treeCat=async(e,q,cid,page=0,parentPage=0)=>{const c=await e.DB.prepare("SELECT * FROM classification_categories WHERE id=?").bind(cid).first();if(!c)return treeRoot(e,q,parentPage);const sub=await children(e,cid),pages=Math.max(1,Math.ceil(sub.length/TREE_PAGE_SIZE));page=Math.max(0,Math.min(pages-1,Number(page)||0));const visible=sub.slice(page*TREE_PAGE_SIZE,(page+1)*TREE_PAGE_SIZE),buttons=visible.map(x=>[{...categoryButton(x),callback_data:"ce_tree_cat:"+x.id+":0:"+page}]);buttons.push(...treePageButtons(cid,page,sub.length,parentPage));buttons.push([{text:"➕ زیرطبقه جدید",callback_data:"ce_tree_new:"+cid}],[{text:"✏️ تغییر نام",callback_data:"ce_tree_rename:"+cid+":"+page+":"+parentPage}],[{text:"↕️ تغییر ترتیب",callback_data:"ce_tree_order:"+cid}],[{text:"🗑 حذف طبقه",callback_data:"ce_tree_delete:"+cid}]);if(c.parent_id!=null)buttons.push([{text:"⬆️ بازگشت به والد",callback_data:"ce_tree_cat:"+c.parent_id+":"+parentPage+":0"}]);else buttons.push([{text:"⬅️ فهرست طبقات اصلی",callback_data:"ce_tree_page:0:"+parentPage}]);return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🌳 <b>ساختار کتابخانه</b>\\n\\nمسیر: <b>"+catHtml(c.name,c.emoji_id,c.emoji)+"</b>\\n\\nزیرطبقه‌ها: "+(sub.length||"ندارد")+"\\nصفحه "+(page+1)+"/"+pages,parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));};
 const treePrompt=async(e,q,step,cid,draft={})=>{await e.DB.prepare("INSERT INTO sessions(user_id,step,channel,post_id,url,draft,updated_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET step=excluded.step,channel=excluded.channel,post_id=excluded.post_id,url=excluded.url,draft=excluded.draft,updated_at=CURRENT_TIMESTAMP").bind(q.from.id,step,HOME,cid||0,"https://t.me/"+HOME+"/"+(cid||0),JSON.stringify(draft)).run();const text=step==="CLASSIFY_TREE_RENAME"?"✏️ نام جدید این طبقه را بفرست.":step==="CLASSIFY_TREE_ORDER"?"↕️ عدد جابه‌جایی را بفرست؛ مثلاً 1 یا -1.":"➕ نام طبقهٔ جدید را بفرست.";return out(await tg(e,"sendMessage",{chat_id:q.message.chat.id,text}));};
 
-const publicTree=async(e,q,parent)=>{
- const s=await setting(e);if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));
- const pref=await e.DB.prepare("SELECT sort_mode FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();const mode=parent==null?"cercis":String(pref?.sort_mode||"cercis"),cs=await children(e,parent,mode),buttons=cs.map(c=>[{...categoryButton(c,"",mode==="count"?" ("+Number(c.n||0)+")":""),callback_data:"home_cat:"+c.id}]);buttons.push([{text:"⚙️ نحوه نمایش",callback_data:"home_sort"}]);if(parent!=null)buttons.push([{text:"🔙 بازگشت",callback_data:"home_categories"}]);else buttons.push([{text:"🔙 منوی اصلی",callback_data:"public_start"}]);return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🗂 <b>کتابخانه Home</b>\n\nیک شاخه را انتخاب کن:",parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
+const libraryHome=async(e,q)=>{
+ const s=await setting(e);
+ if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));
+ const text="🗂 <b>کتابخانه Home</b>\n\nدر این بخش می‌توانی شاخه‌های آرشیو را مرور کنی، ترتیب نمایش را تغییر بدهی، در پست‌ها جست‌وجو کنی و پست‌های دلخواهت را در فهرست علاقه‌مندی‌ها نگه داری.";
+ const keyboard={inline_keyboard:[
+  [{text:"🗂 مرور شاخه‌های کتابخانه",callback_data:"home_categories",style:"primary"}],
+  [{text:"⚙️ تغییر ترتیب نمایش",callback_data:"home_sort_home"}],
+  [{text:"🔎 جست‌وجو",switch_inline_query_current_chat:"",style:"success"},{text:"❤️ پست‌های پسندیده‌شده",callback_data:"favorites:0"}],
+  [{text:"🔙 منوی اصلی",callback_data:"public_start"}]
+ ]};
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text,parse_mode:"HTML",reply_markup:keyboard}));
 };
+
+const publicTree=async(e,q)=>{
+ const s=await setting(e);if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));
+ const pref=await e.DB.prepare("SELECT sort_mode,random_seed FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();
+ const mode=String(pref?.sort_mode||"cercis"),seed=Number(pref?.random_seed)||1;
+ const cs=await children(e,null,mode,seed);
+ const buttons=cs.map(c=>[{...categoryButton(c,"",mode==="count"?" ("+Number(c.n||0)+")":""),callback_data:"home_cat:"+c.id}]);
+ if(!buttons.length)buttons.push([{text:"هنوز شاخه‌ای ثبت نشده است",callback_data:"home_noop"}]);
+ buttons.push([{text:"⚙️ نحوه نمایش",callback_data:"home_sort"}]);
+ buttons.push([{text:"🔙 بازگشت به کتابخانه",callback_data:"library_home"}]);
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🗂 <b>شاخه‌های کتابخانه Home</b>\n\nیک شاخه را برای مرور پست‌ها انتخاب کن:",parse_mode:"HTML",reply_markup:{inline_keyboard:buttons}}));
+};
+
 const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
  const s=await setting(e);if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));
  const c=await e.DB.prepare("SELECT * FROM classification_categories WHERE id=?").bind(cid).first();if(!c)return out({ok:true});
