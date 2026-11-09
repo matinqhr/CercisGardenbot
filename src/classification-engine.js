@@ -167,7 +167,7 @@ const publicTree=async(e,q)=>{
 };
 
 const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
- const s=await setting(e);if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));
+ const s=await setting(e);if(!Number(s.library_enabled))return out({ok:true});
  const c=await e.DB.prepare("SELECT * FROM classification_categories WHERE id=?").bind(cid).first();if(!c)return out({ok:true});
  const pref=await e.DB.prepare("SELECT sort_mode,random_seed FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();
  const mode=String(pref?.sort_mode||"cercis"),seed=Number(pref?.random_seed)||1;
@@ -214,7 +214,7 @@ const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
 };
 
 const sortMenu=async(e,q,parent,returnTo="category")=>{
- const s=await setting(e);if(!Number(s.library_enabled))return out(await tg(e,"answerCallbackQuery",{callback_query_id:q.id,text:"کتابخانه فعلاً فعال نیست."}));
+ const s=await setting(e);if(!Number(s.library_enabled))return out({ok:true});
  const target=Number(parent)||0;
  const pref=await e.DB.prepare("SELECT sort_mode FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();
  const current=String(pref?.sort_mode||"cercis"),cb=m=>"home_sort_set:"+m+":"+target+":"+returnTo;
