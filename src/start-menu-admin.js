@@ -1,4 +1,4 @@
-import {ensureStartMenuSettings,getStartMenuSettings,buildStartPayload} from "./start-menu-store.js";
+import {ensureStartMenuSettings,getStartMenuSettings,sendStartMenuMessage} from "./start-menu-store.js";
 
 const tg=async(e,m,b={})=>(await fetch(`https://api.telegram.org/bot${e.BOT_TOKEN}/${m}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)})).json();
 const out=x=>new Response(JSON.stringify(x??{ok:true}),{status:200,headers:{"content-type":"application/json"}});
@@ -10,7 +10,7 @@ const MAX_BUTTON_CHARS=64;
 async function openSettings(e,q){
   const s=await getStartMenuSettings(e);
   const rows=[
-    [{text:"✏️ متن پیام شروع",callback_data:"startmenu_edit:text",style:"primary"}],
+    [{text:"🖼 دریافت پیام Rich Message",callback_data:"startmenu_edit:text",style:"primary"}],
     [{text:"📚 نام دکمهٔ کتابخانه",callback_data:"startmenu_edit:library"}],
     [{text:"📜 نام دکمهٔ فهرست پرونده‌ها",callback_data:"startmenu_edit:dossiers"}],
     [{text:"ℹ️ نام دکمهٔ دربارهٔ ربات",callback_data:"startmenu_edit:about"}],
@@ -26,7 +26,7 @@ async function openSettings(e,q){
     "📜 "+esc(s.dossiers_text)+"\n"+
     "ℹ️ "+esc(s.about_text)+"\n"+
     "📖 "+esc(s.guide_text)+"\n\n"+
-    "متن پیام شروع: "+(String(s.start_text||"").trim()?"شخصی‌سازی‌شده":"متن پیش‌فرض");
+    "محتوای پیام شروع: "+(s.start_source_chat_id&&s.start_source_message_id?"Rich Message اصلی ثبت‌شده":String(s.start_text||"").trim()?"متن قدیمی":"متن پیش‌فرض");
   const result=await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text,parse_mode:"HTML",reply_markup:{inline_keyboard:rows}});
   if(!result?.ok)console.error("[START_MENU_SETTINGS_RENDER]",result?.description||result);
   return out(result);
@@ -36,7 +36,7 @@ async function beginEdit(e,q,field){
   if(!["text","library","dossiers","about","guide"].includes(field))return out({ok:true});
   await e.DB.prepare("INSERT INTO bot_start_menu_sessions(user_id,field,created_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET field=excluded.field,created_at=CURRENT_TIMESTAMP").bind(q.from.id,field).run();
   const hint=field==="text"
-    ?"متن را به قالب Rich HTML تلگرام بفرست؛ مانند <mark>هایلایت</mark>، <a href='https://example.com'>لینک روی متن</a>، <h2>تیتر</h2> و <blockquote>نقل‌قول</blockquote>. دکمه‌های منو به‌صورت خودکار داخل Rich Message قرار می‌گیرند. برای بازگشت به متن پیش‌فرض /reset بفرست."
+    ?"یک پیام Rich Message واقعی را مستقیماً در همین گفت‌وگوی خصوصی برای ربات بفرست؛ همان پیام با متن، قالب‌بندی، عکس‌ها و ویدیوهای داخلش عیناً در منوی /start کپی می‌شود. نیازی به نوشتن HTML یا کد نیست. پیام اصلی را از این گفت‌وگو حذف نکن؛ ربات برای کپی‌کردن آن به پیام اصلی نیاز دارد. برای بازگشت به متن پیش‌فرض /reset بفرست."
     :"عنوان جدید "+LABELS[field]+" را ارسال کن. می‌توانی یک ایموجی معمولی یا Custom Emoji در ابتدای عنوان قرار بدهی. حداکثر ۶۴ نویسه؛ برای بازگشت به عنوان پیش‌فرض /reset بفرست.";
   return out(await tg(e,"sendMessage",{chat_id:q.message.chat.id,text:"✏️ "+hint,reply_markup:{force_reply:true,selective:true}}));
 }
@@ -56,27 +56,34 @@ export async function handleStartMenuMessage(e,m){
   const session=await e.DB.prepare("SELECT field FROM bot_start_menu_sessions WHERE user_id=?").bind(m.from.id).first();
   if(!session?.field)return null;
   const field=String(session.field),raw=String(m.text??m.caption??""),trimmed=raw.trim();
-  if(!trimmed)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ پیام متنی خالی است؛ لطفاً Rich HTML یا عنوان دکمه را بفرست."}));
+
   if(trimmed==="/reset"){
-    if(field==="text")await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=NULL,start_entities='[]',updated_at=CURRENT_TIMESTAMP WHERE id=1").run();
-    else await e.DB.prepare("UPDATE bot_start_menu_settings SET "+field+"_text=?, "+field+"_icon_custom_emoji_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1").bind(({library:"📚 کتابخانه Home",dossiers:"📜 فهرست پرونده‌های ثبت‌شده",about:"ℹ️ درباره ربات",guide:"📖 راهنما"})[field]).run();
+    if(field==="text"){
+      await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=NULL,start_entities='[]',start_source_chat_id=NULL,start_source_message_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1").run();
+    }else{
+      await e.DB.prepare("UPDATE bot_start_menu_settings SET "+field+"_text=?, "+field+"_icon_custom_emoji_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1").bind(({library:"📚 کتابخانه Home",dossiers:"📜 فهرست پرونده‌های ثبت‌شده",about:"ℹ️ درباره ربات",guide:"📖 راهنما"})[field]).run();
+    }
     await e.DB.prepare("DELETE FROM bot_start_menu_sessions WHERE user_id=?").bind(m.from.id).run();
     return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"♻️ مقدار به حالت پیش‌فرض برگشت.",reply_markup:{inline_keyboard:[[{text:"🎛 بازگشت به تنظیمات منو",callback_data:"startmenu_open"}]]}}));
   }
+
   if(field==="text"){
-    const bytes=new TextEncoder().encode(raw).length;
-    if(bytes>32768)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ Rich Message حداکثر ۳۲٬۷۶۸ بایت UTF-8 است."}));
-    await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=?,start_entities='[]',updated_at=CURRENT_TIMESTAMP WHERE id=1").bind(raw).run();
+    const isPrivate=m.chat?.type==="private";
+    const isRichMessage=Boolean(m.rich_message&&Array.isArray(m.rich_message.blocks));
+    if(!isPrivate||!isRichMessage||!Number.isSafeInteger(Number(m.message_id))||Number(m.message_id)<=0||m.chat?.id==null){
+      return out(await tg(e,"sendMessage",{chat_id:m.chat?.id,text:"❌ لطفاً یک پیام Rich Message واقعی را مستقیماً در گفت‌وگوی خصوصی ربات ارسال کن؛ متن HTML یا پیام معمولی پذیرفته نیست."}));
+    }
+    await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=NULL,start_entities='[]',start_source_chat_id=?,start_source_message_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=1").bind(Number(m.chat.id),Number(m.message_id)).run();
   }else{
     const label=extractButtonLabel(m);
     const chars=Array.from(label.text).length;
     if(!label.text||chars>MAX_BUTTON_CHARS)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ عنوان دکمه باید پس از جداکردن ایموجی اختصاصی، بین ۱ تا ۶۴ نویسه باشد."}));
     await e.DB.prepare("UPDATE bot_start_menu_settings SET "+field+"_text=?,"+field+"_icon_custom_emoji_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=1").bind(label.text,label.icon).run();
   }
-  await e.DB.prepare("DELETE FROM bot_start_menu_sessions WHERE user_id=?").bind(m.from.id).run();
-  return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"✅ تغییر ذخیره شد.",reply_markup:{inline_keyboard:[[{text:"👁 پیش‌نمایش منوی شروع",callback_data:"startmenu_preview"}],[{text:"🎛 تنظیمات منوی شروع",callback_data:"startmenu_open"}]]}}));
-}
 
+  await e.DB.prepare("DELETE FROM bot_start_menu_sessions WHERE user_id=?").bind(m.from.id).run();
+  return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"✅ تغییر ذخیره شد؛ محتوای اصلی پیام بدون بازسازی نگهداری می‌شود.",reply_markup:{inline_keyboard:[[{text:"👁 پیش‌نمایش منوی شروع",callback_data:"startmenu_preview"}],[{text:"🎛 تنظیمات منوی شروع",callback_data:"startmenu_open"}]]}}));
+}
 export default {async fetch(req,e){
   let u;try{u=await req.clone().json()}catch{return out({ok:true})}
   const q=u?.callback_query,m=u?.message,id=q?.from?.id||m?.from?.id;
@@ -89,13 +96,12 @@ export default {async fetch(req,e){
   if(d==="startmenu_open")return openSettings(e,q);
   if(d.startsWith("startmenu_edit:"))return beginEdit(e,q,d.split(":")[1]);
   if(d==="startmenu_preview"){
-    const payload=await buildStartPayload(e,id);
-    const result=await tg(e,"sendRichMessage",{chat_id:q.message.chat.id,...payload});
+    const result=await sendStartMenuMessage(e,q.message.chat.id,id);
     if(!result?.ok)console.error("[START_MENU_PREVIEW_SEND]",result?.description||result);
     return out(result);
   }
   if(d==="startmenu_reset"){
-    await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=NULL,start_entities='[]',library_text='📚 کتابخانه Home',library_icon_custom_emoji_id=NULL,dossiers_text='📜 فهرست پرونده‌های ثبت‌شده',dossiers_icon_custom_emoji_id=NULL,about_text='ℹ️ درباره ربات',about_icon_custom_emoji_id=NULL,guide_text='📖 راهنما',guide_icon_custom_emoji_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1").run();
+    await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=NULL,start_entities='[]',start_source_chat_id=NULL,start_source_message_id=NULL,library_text='📚 کتابخانه Home',library_icon_custom_emoji_id=NULL,dossiers_text='📜 فهرست پرونده‌های ثبت‌شده',dossiers_icon_custom_emoji_id=NULL,about_text='ℹ️ درباره ربات',about_icon_custom_emoji_id=NULL,guide_text='📖 راهنما',guide_icon_custom_emoji_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1").run();
     return openSettings(e,q);
   }
   return out({ok:true});
