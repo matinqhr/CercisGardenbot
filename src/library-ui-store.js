@@ -1,12 +1,12 @@
 const DEFAULTS=Object.freeze({
-  hub_text:"🗂 <b>کتابخانه Home</b>\n\nدر این بخش می‌توانی شاخه‌های آرشیو را مرور کنی، ترتیب نمایش را تغییر بدهی، در پست‌ها جست‌وجو کنی و پست‌های دلخواهت را در فهرست علاقه‌مندی‌ها نگه داری.",
+  hub_text:"<h2>🗂 کتابخانه 𝐇𝐨𝐦𝐞</h2>\n<p>در این بخش می‌توانی شاخه‌های آرشیو را مرور کنی، ترتیب نمایش را تغییر بدهی و پست‌های دلخواهت را پیدا کنی.</p>",
   hub_entities:[],
   hub_custom:false,
-  tree_text:"🗂 <b>شاخه‌های کتابخانه Home</b>\n\nیک شاخه را برای مرور پست‌ها انتخاب کن:",
+  tree_text:"<h2>🗂 شاخه‌های کتابخانه 𝐇𝐨𝐦𝐞</h2>\n<p>برای دیدن زیرشاخه‌ها و پست‌ها، یکی از گزینه‌های پایین را انتخاب کن.</p>",
   tree_entities:[],
   tree_custom:false,
   browse_text:"🗂 مرور شاخه‌های کتابخانه",
-  sort_text:"⚙️ تغییر ترتیب نمایش",
+  sort_text:"⚙️ تغییر ترتیب نمایش",\n  appearance_text:"🎨 تغییر ظاهر کتابخانه",
   search_text:"🔎 جست‌وجو",
   favorites_text:"❤️ پست‌های پسندیده‌شده",
   hub_back_text:"🔙 منوی اصلی",
@@ -19,7 +19,7 @@ const DEFAULTS=Object.freeze({
   favorites_back_text:"🔙 بازگشت به کتابخانه",
   remove_favorite_text:"✖️",
   previous_text:"◀️ پست‌های قبل",
-  next_text:"پست‌های بعد ▶️",
+  next_text:"پست‌های بعد ▶️",\n  previous_branches_text:"◀️ شاخه‌های قبل",\n  next_branches_text:"شاخه‌های بعد ▶️",
   no_categories_text:"هنوز شاخه‌ای ثبت نشده است",
   browse_style:"primary",
   sort_style:"default",
@@ -35,11 +35,11 @@ const DEFAULTS=Object.freeze({
 });
 const LABEL_BINDING={hub_sort:"sort"};
 const STYLE_BINDING={
-  browse:"browse",hub_sort:"sort",search:"search",favorites:"favorites",hub_back:"back",
+  browse:"browse",hub_sort:"sort",appearance:"action",search:"search",favorites:"favorites",hub_back:"back",
   tree_sort:"sort",tree_back:"back",category:"category",post:"post",
   category_sort:"sort",category_back:"back",add_favorites:"action",
   save_selected:"success",cancel_selected:"danger",favorites_back:"back",
-  remove_favorite:"danger",previous:"pagination",next:"pagination"
+  remove_favorite:"danger",previous:"pagination",next:"pagination",previous_branches:"pagination",next_branches:"pagination"
 };
 const ALLOWED_STYLES=new Set(["default","primary","success","danger","link"]);
 let schemaPromise=null;
@@ -71,8 +71,9 @@ export async function resetLibraryUISettings(e){
   await e.DB.prepare("UPDATE bot_library_ui_settings SET settings_json='{}',updated_at=CURRENT_TIMESTAMP WHERE id=1").run();
   return {...DEFAULTS};
 }
+const brandHomeHtml=value=>String(value??"").replace(/(<[^>]*>)|([^<]+)/g,(_,tag,text)=>tag||text.replace(/\bHome\b/g,"𝐇𝐨𝐦𝐞"));
 export function libraryTextPayload(settings,key){
-  const text=String(settings?.[key]??DEFAULTS[key]??"");
+  const text=brandHomeHtml(settings?.[key]??DEFAULTS[key]??"");
   return {rich_message:{html:text,is_rtl:true}};
 }
 const htmlEsc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
@@ -97,7 +98,7 @@ export function richButtonRows(rows=[]){
 }
 export function libraryButton(settings,key,extra={}){
   const labelKey=LABEL_BINDING[key]||key;
-  const label=String(extra.text??settings?.[labelKey+"_text"]??DEFAULTS[labelKey+"_text"]??key).trim();
+  const label=String(extra.text??settings?.[labelKey+"_text"]??DEFAULTS[labelKey+"_text"]??key).trim().replace(/\bHome\b/g,"𝐇𝐨𝐦𝐞");
   const icon=settings?.[labelKey+"_icon_custom_emoji_id"];
   const iconAlt=settings?.[labelKey+"_icon_custom_emoji_alt"];
   const styleKey=STYLE_BINDING[key]||key;
@@ -120,8 +121,8 @@ export function buildLibraryHomePreview(settings){
   return rich;
 }
 export const LIBRARY_UI_DEFAULTS=DEFAULTS;
-export const LIBRARY_UI_STYLE_FIELDS=["browse","sort","search","favorites","back","category","post","action","success","danger","pagination"];
+export const LIBRARY_UI_STYLE_FIELDS=["browse","sort","appearance","search","favorites","back","category","post","action","success","danger","pagination"];
 export const LIBRARY_UI_LABEL_FIELDS=[
-  "browse","sort","search","favorites","hub_back","tree_back","category_sort","category_back",
-  "add_favorites","save_selected","cancel_selected","favorites_back","remove_favorite","previous","next"
+  "browse","sort","appearance","search","favorites","hub_back","tree_back","category_sort","category_back",
+  "add_favorites","save_selected","cancel_selected","favorites_back","remove_favorite","previous","next","previous_branches","next_branches"
 ];
