@@ -8,18 +8,14 @@ const guideText=`📚 <b>راهنمای کتابخانه</b>\n\nلینک یا خ
 
 async function sendMenu(e,chatId,userId){
   const payload=await buildStartPayload(e,userId);
-  let result=await tg(e,"sendMessage",{chat_id:chatId,...payload});
+  let result=await tg(e,"sendRichMessage",{chat_id:chatId,...payload});
   if(result?.ok)return result;
-  console.error("[START_MENU_SEND_PRIMARY]",result?.description||result);
-  const withoutEffect={...payload};
-  delete withoutEffect.message_effect_id;
-  result=await tg(e,"sendMessage",{chat_id:chatId,...withoutEffect});
-  if(result?.ok)return result;
-  const fallback={...withoutEffect};
-  if(fallback.reply_markup?.inline_keyboard){
-    fallback.reply_markup={inline_keyboard:fallback.reply_markup.inline_keyboard.map(row=>row.map(({icon_custom_emoji_id,...button})=>button))};
-  }
-  return tg(e,"sendMessage",{chat_id:chatId,...fallback});
+  console.error("[START_RICH_MESSAGE_SEND_PRIMARY]",result?.description||result);
+  const fallback={...payload};
+  delete fallback.message_effect_id;
+  result=await tg(e,"sendRichMessage",{chat_id:chatId,...fallback});
+  if(!result?.ok)console.error("[START_RICH_MESSAGE_SEND_FALLBACK]",result?.description||result);
+  return result;
 }
 
 async function sendMenuEdit(e,q){
@@ -28,13 +24,8 @@ async function sendMenuEdit(e,q){
   const body={chat_id:q?.message?.chat?.id,message_id:q?.message?.message_id,...editablePayload};
   let result=await tg(e,"editMessageText",body);
   if(result?.ok)return result;
-  const fallback={...body};
-  if(fallback.reply_markup?.inline_keyboard){
-    fallback.reply_markup={inline_keyboard:fallback.reply_markup.inline_keyboard.map(row=>row.map(({icon_custom_emoji_id,...button})=>button))};
-  }
-  result=await tg(e,"editMessageText",fallback);
-  if(result?.ok)return result;
-  return tg(e,"sendMessage",{chat_id:q?.message?.chat?.id,...payload});
+  console.error("[START_RICH_MESSAGE_EDIT]",result?.description||result);
+  return tg(e,"sendRichMessage",{chat_id:q?.message?.chat?.id,...payload});
 }
 
 async function edit(e,q,text,markup){
