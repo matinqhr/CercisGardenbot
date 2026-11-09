@@ -46,7 +46,7 @@ async function styleMenu(e,q){
  const s=await getLibraryUISettings(e),rows=[];
  for(const key of LIBRARY_UI_STYLE_FIELDS)rows.push([{text:STYLE_NAMES_FA[key]+": "+STYLE_NAMES[s[key+"_style"]||"default"],callback_data:"libraryui_stylepick:"+key}]);
  rows.push([{text:"🔙 بازگشت",callback_data:"libraryui_open"}]);
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🎨 <b>رنگ‌بندی دکمه‌ها</b>\n\nتلگرام چهار حالت در دسترس این منو دارد: پیش‌فرض، اصلی، سبز و قرمز. این رنگ‌ها فقط روی دکمه‌ها اعمال می‌شوند؛ متن پیام رنگ دلخواه یا هایلایت پس‌زمینه‌ای جداگانه نمی‌گیرد.",parse_mode:"HTML",reply_markup:{inline_keyboard:rows}}));
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"🎨 <b>رنگ‌بندی دکمه‌ها</b>\n\nدکمه‌های Rich Message می‌توانند پیش‌فرض، اصلی، سبز، قرمز یا لینک‌مانند باشند. هایلایت متن با <mark> و لینک داخل متن با <a href=URL> انجام می‌شود.",parse_mode:"HTML",reply_markup:{inline_keyboard:rows}}));
 }
 async function stylePicker(e,q,key){
  if(!LIBRARY_UI_STYLE_FIELDS.includes(key))return out({ok:true});
@@ -81,7 +81,7 @@ export async function handleLibraryUIMessage(e,m){
  if(!trimmed)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ پیام خالی است؛ لطفاً متن را بفرست."}));
  const rich=field==="hub_text"||field==="tree_text";
  if(trimmed==="/reset"){
-  const patch=rich?{[field]:null,[field.replace(/_text$/,"_entities")]:[],[field.replace(/_text$/,"_custom")]:false}:{[field+"_text"]:null,[field+"_icon_custom_emoji_id"]:null};
+  const patch=rich?{[field]:null,[field.replace(/_text$/,"_entities")]:[],[field.replace(/_text$/,"_custom")]:false}:{[field+"_text"]:null,[field+"_icon_custom_emoji_id"]:null,[field+"_icon_custom_emoji_alt"]:null};
   await updateLibraryUISettings(e,patch);
   await e.DB.prepare("DELETE FROM bot_library_ui_sessions WHERE user_id=?").bind(m.from.id).run();
   return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"♻️ مقدار به حالت پیش‌فرض برگشت.",reply_markup:{inline_keyboard:[[{text:"🎨 بازگشت به تنظیمات کتابخانه",callback_data:"libraryui_open"}]]}}));
@@ -92,7 +92,7 @@ export async function handleLibraryUIMessage(e,m){
  }else{
   const label=buttonLabel(m),length=Array.from(label.text).length;
   if(!label.text||length>64)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ عنوان دکمه باید بین ۱ تا ۶۴ نویسه باشد."}));
-  await updateLibraryUISettings(e,{[field+"_text"]:label.text,[field+"_icon_custom_emoji_id"]:label.icon});
+  await updateLibraryUISettings(e,{[field+"_text"]:label.text,[field+"_icon_custom_emoji_id"]:label.icon,[field+"_icon_custom_emoji_alt"]:label.alt||null});
  }
  await e.DB.prepare("DELETE FROM bot_library_ui_sessions WHERE user_id=?").bind(m.from.id).run();
  return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"✅ تغییر ذخیره شد.",reply_markup:{inline_keyboard:[[{text:"👁 پیش‌نمایش کتابخانه",callback_data:"libraryui_preview"}],[{text:"🎨 تنظیمات کتابخانه",callback_data:"libraryui_open"}]]}}));
