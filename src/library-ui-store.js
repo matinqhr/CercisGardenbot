@@ -40,7 +40,7 @@ const LABEL_BINDING={hub_sort:"sort"};
 const STYLE_BINDING={
   browse:"browse",hub_sort:"sort",appearance:"action",search:"search",favorites:"favorites",hub_back:"back",
   tree_sort:"sort",tree_back:"back",category:"category",post:"post",
-  category_sort:"sort",category_back:"back",add_favorites:"action",
+  category_sort:"success",category_back:"back",add_favorites:"danger",
   save_selected:"success",cancel_selected:"danger",favorites_back:"back",
   remove_favorite:"danger",previous:"pagination",next:"pagination",previous_branches:"pagination",next_branches:"pagination"
 };
