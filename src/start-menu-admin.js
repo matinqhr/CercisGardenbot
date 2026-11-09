@@ -42,10 +42,10 @@ async function beginEdit(e,q,field){
 }
 
 function extractButtonLabel(m){
-  const raw=String(m?.text??m?.caption??"").trim();
+  const raw=String(m?.text??m?.caption??"");
   const entities=[...(Array.isArray(m?.entities)?m.entities:[]),...(Array.isArray(m?.caption_entities)?m.caption_entities:[])];
   const custom=entities.find(x=>x?.type==="custom_emoji"&&x?.custom_emoji_id);
-  if(!custom)return {text:raw,icon:null};
+  if(!custom)return {text:raw.trim(),icon:null};
   const start=Math.max(0,Number(custom.offset)||0),end=Math.max(start,start+(Number(custom.length)||0));
   return {text:(raw.slice(0,start)+raw.slice(end)).trim(),icon:String(custom.custom_emoji_id)};
 }
@@ -57,7 +57,7 @@ export async function handleStartMenuMessage(e,m){
   if(!session?.field)return null;
   const field=String(session.field),raw=String(m.text??m.caption??"").trim();
   if(!raw)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ پیام متنی خالی است؛ لطفاً متن را بفرست."}));
-  if(raw==="/reset"){
+  if(trimmed==="/reset"){
     if(field==="text")await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=NULL,start_entities='[]',updated_at=CURRENT_TIMESTAMP WHERE id=1").run();
     else await e.DB.prepare("UPDATE bot_start_menu_settings SET "+field+"_text=?, "+field+"_icon_custom_emoji_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1").bind(({library:"📚 کتابخانه Home",dossiers:"📜 فهرست پرونده‌های ثبت‌شده",about:"ℹ️ درباره ربات",guide:"📖 راهنما"})[field]).run();
     await e.DB.prepare("DELETE FROM bot_start_menu_sessions WHERE user_id=?").bind(m.from.id).run();
@@ -65,7 +65,7 @@ export async function handleStartMenuMessage(e,m){
   }
   if(field==="text"){
     const entities=Array.isArray(m.entities)?m.entities:(Array.isArray(m.caption_entities)?m.caption_entities:[]);
-    if(Array.from(raw).length>4096)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ متن از محدودیت ۴۰۹۶ نویسه بیشتر است."}));
+    if(Array.from(trimmed).length>4096)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ متن از محدودیت ۴۰۹۶ نویسه بیشتر است."}));
     await e.DB.prepare("UPDATE bot_start_menu_settings SET start_text=?,start_entities=?,updated_at=CURRENT_TIMESTAMP WHERE id=1").bind(raw,JSON.stringify(entities)).run();
   }else{
     const label=extractButtonLabel(m);
