@@ -81,7 +81,7 @@ export async function handleLibraryUIMessage(e,m){
  if(!trimmed)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ پیام خالی است؛ لطفاً متن را بفرست."}));
  const rich=field==="hub_text"||field==="tree_text";
  if(trimmed==="/reset"){
-  const patch=rich?{[field]:null,[field.replace(/_text$/,"_entities")]:[]}:{[field+"_text"]:null,[field+"_icon_custom_emoji_id"]:null};
+  const patch=rich?{[field]:null,[field.replace(/_text$/,"_entities")]:[],[field.replace(/_text$/,"_custom")]:false}:{[field+"_text"]:null,[field+"_icon_custom_emoji_id"]:null};
   await updateLibraryUISettings(e,patch);
   await e.DB.prepare("DELETE FROM bot_library_ui_sessions WHERE user_id=?").bind(m.from.id).run();
   return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"♻️ مقدار به حالت پیش‌فرض برگشت.",reply_markup:{inline_keyboard:[[{text:"🎨 بازگشت به تنظیمات کتابخانه",callback_data:"libraryui_open"}]]}}));
@@ -89,7 +89,7 @@ export async function handleLibraryUIMessage(e,m){
  if(rich){
   if(Array.from(trimmed).length>4096)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ متن از محدودیت ۴۰۹۶ نویسه بیشتر است."}));
   const entities=Array.isArray(m.entities)?m.entities:(Array.isArray(m.caption_entities)?m.caption_entities:[]);
-  await updateLibraryUISettings(e,{[field]:raw,[field.replace(/_text$/,"_entities")]:entities});
+  await updateLibraryUISettings(e,{[field]:raw,[field.replace(/_text$/,"_entities")]:entities,[field.replace(/_text$/,"_custom")]:true});
  }else{
   const label=buttonLabel(m),length=Array.from(label.text).length;
   if(!label.text||length>64)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ عنوان دکمه باید بین ۱ تا ۶۴ نویسه باشد."}));
