@@ -196,7 +196,7 @@ const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
  }
  const selectedCount=selecting?await e.DB.prepare("SELECT COUNT(*) n FROM user_library_selection_items WHERE user_id=?").bind(q.from.id).first():null;
  const buttons=sub.map(x=>[styleLibraryButton(ui,"category",{...categoryButton(x,"",mode==="count"?" ("+Number(x.n||0)+")":""),callback_data:"home_cat:"+x.id})]);
- const subNav=[];if(subPage>0)subNav.push({text:"◀️ شاخه‌های قبل",callback_data:"home_cat_sub_page:"+cid+":"+(subPage-1)+":"+page});if(subHasNext)subNav.push({text:"شاخه‌های بعد ▶️",callback_data:"home_cat_sub_page:"+cid+":"+(subPage+1)+":"+page});if(subNav.length)buttons.push(subNav);
+ const subNav=[];if(subPage>0)subNav.push(styleLibraryButton(ui,"pagination",{text:"◀️ شاخه‌های قبل",callback_data:"home_cat_sub_page:"+cid+":"+(subPage-1)+":"+page}));if(subHasNext)subNav.push(styleLibraryButton(ui,"pagination",{text:"شاخه‌های بعد ▶️",callback_data:"home_cat_sub_page:"+cid+":"+(subPage+1)+":"+page}));if(subNav.length)buttons.push(subNav);
  buttons.push(...posts.map(x=>{
   const title=(String(x.title||"").trim()||("📌 پست #"+x.message_id))+x.mark;
   if(selecting)return [styleLibraryButton(ui,selected.has(Number(x.message_id))?"success":"category",{text:(selected.has(Number(x.message_id))?"✅ ":"▫️ ")+title.slice(0,60),callback_data:"fav_toggle:"+cid+":"+page+":"+subPage+":"+x.message_id})];
@@ -223,18 +223,21 @@ const publicCategory=async(e,q,cid,page=0,subPage=0)=>{
 
 const sortMenu=async(e,q,parent,returnTo="category")=>{
  const s=await setting(e);if(!Number(s.library_enabled))return out({ok:true});
+ const ui=await getLibraryUISettings(e);
  const target=Number(parent)||0;
  const pref=await e.DB.prepare("SELECT sort_mode FROM user_library_preferences WHERE user_id=?").bind(q.from.id).first();
  const current=String(pref?.sort_mode||"cercis"),cb=m=>"home_sort_set:"+m+":"+target+":"+returnTo;
+ const option=(mode,label)=>styleLibraryButton(ui,current===mode?"success":"category",{text:(current===mode?"🟢 ":"⚪ ")+label,callback_data:cb(mode)});
  const rows=[
-  [{text:current==="cercis"?"🟢 ترتیب سرسیس":"⚪ ترتیب سرسیس",callback_data:cb("cercis")}],
-  [{text:current==="alphabetical"?"🟢 الفبایی":"⚪ الفبایی",callback_data:cb("alphabetical")}],
-  [{text:current==="count"?"🟢 بر اساس تعداد":"⚪ بر اساس تعداد",callback_data:cb("count")}],
-  [{text:current==="random"?"🟢 ترتیب تصادفی":"⚪ ترتیب تصادفی",callback_data:cb("random")}]
+  [option("cercis","ترتیب سرسیس")],
+  [option("alphabetical","الفبایی")],
+  [option("count","بر اساس تعداد")],
+  [option("random","ترتیب تصادفی")]
  ];
- if(current==="random")rows.push([{text:"🔀 ساخت چینش تصادفی تازه",callback_data:"home_sort_shuffle:"+target+":"+returnTo,style:"success"}]);
- rows.push([{text:"🔙 بازگشت",callback_data:returnTo==="hub"?"library_home":target?"home_cat:"+target:"home_categories"}]);
- return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"⚙️ <b>نحوه نمایش</b>\n\nترتیب دلخواه را انتخاب کن:\n\nترتیب تصادفی برای هر کاربر پایدار می‌ماند تا زمانی که چینش تازه ساخته شود.",parse_mode:"HTML",reply_markup:{inline_keyboard:rows}}));
+ if(current==="random")rows.push([libraryButton(ui,"add_favorites",{text:"🔀 ساخت چینش تصادفی تازه",callback_data:"home_sort_shuffle:"+target+":"+returnTo})]);
+ const backKey=returnTo==="hub"?"hub_back":target?"category_back":"tree_back";
+ rows.push([libraryButton(ui,backKey,{callback_data:returnTo==="hub"?"library_home":target?"home_cat:"+target:"home_categories"})]);
+ return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text:"⚙️ <b>نحوه نمایش</b>\\n\\nترتیب دلخواه را انتخاب کن:\\n\\nترتیب تصادفی برای هر کاربر پایدار می‌ماند تا زمانی که چینش تازه ساخته شود.",parse_mode:"HTML",reply_markup:{inline_keyboard:rows}}));
 };
 
 const favoritesPage=async(e,q,page=0)=>{
@@ -251,7 +254,7 @@ const favoritesPage=async(e,q,page=0)=>{
    libraryButton(ui,"remove_favorite",{callback_data:"fav_remove:"+r.post_id+":"+safePage})
   ]);
  }
- const nav=[];if(safePage>0)nav.push({text:"‹ پست‌های جدیدتر",callback_data:"favorites:"+(safePage-1)});if(safePage+1<pages)nav.push({text:"پست‌های قدیمی‌تر ›",callback_data:"favorites:"+(safePage+1)});if(nav.length)buttons.push(nav);
+ const nav=[];if(safePage>0)nav.push(libraryButton(ui,"previous",{text:"‹ پست‌های جدیدتر",callback_data:"favorites:"+(safePage-1)}));if(safePage+1<pages)nav.push(libraryButton(ui,"next",{text:"پست‌های قدیمی‌تر ›",callback_data:"favorites:"+(safePage+1)}));if(nav.length)buttons.push(nav);
  buttons.push([libraryButton(ui,"favorites_back",{callback_data:"library_home"})]);
  const lines=rows.map((r,i)=>{
   const title=String(r.title||("پست #"+r.post_id));
