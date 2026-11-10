@@ -117,7 +117,7 @@ async function routeCallback(req,e,ctx,u){const q=u?.callback_query;if(!q)return
  if(d==="panel"&&admin(e,id))return ensureResponse(import("./admin-panel.js").then(x=>x.default.fetch(req,e,ctx)));
  if((d==="home_appearance_toggle"||d==="library_home"||d==="home_categories"||d.startsWith("home_cat:")||d.startsWith("home_cat_page:")||d.startsWith("home_cat_sub_page:")||d==="home_sort"||d==="home_sort_home"||d.startsWith("home_sort:")||d.startsWith("home_sort_set:")||d.startsWith("home_sort_shuffle:")||d.startsWith("fav_")||d.startsWith("favorites:")))return ensureResponse(import("./classification-engine.js").then(x=>x.default.fetch(req,e,ctx)));
  if(d==="about"||d==="help"||d==="public_start")return ensureResponse(import("./start-handler.js").then(x=>x.default.fetch(req,e,ctx)));
- if(d==="public_list"||d==="public_list:0:0"||d.startsWith("public_list:"))return ensureResponse(import("./public-list-handler.js").then(x=>x.default.fetch(req,e,ctx)));
+ if(d==="public_list"||d==="public_list:0:0"||d.startsWith("public_list:")||d==="micro_list"||d.startsWith("micro_"))return ensureResponse(import("./public-list-handler.js").then(x=>x.default.fetch(req,e,ctx)));
  if(d==="book_index"||d.startsWith("book:")||d.startsWith("book_index:")||d.startsWith("book_goto:")||d.startsWith("book_pick:")||d.startsWith("book_back:")||d==="book_noop")return ensureResponse(import("./public-book-gate.js").then(x=>x.default.fetch(req,e,ctx)));
  if(d.startsWith("flashpub:"))return ensureResponse(import("./flashcard-public-list-gate.js").then(x=>x.default.fetch(req,e,ctx)));
  if(d.startsWith("flash:")||d.startsWith("flash_index:")||d==="flash_noop")return ensureResponse(import("./flashcard-gate.js").then(x=>x.default.fetch(req,e,ctx)));
