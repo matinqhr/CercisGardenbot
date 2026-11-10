@@ -46,7 +46,7 @@ const renderMicroList=async(e,q,page)=>{
   for(const r of rows){
    let label=String(r.title||("پست #"+r.post_id));
    if(r.title_emoji&&!r.title_emoji_id)label=String(r.title_emoji)+" "+label;
-   label=Array.from(label).slice(0,55).join("");
+   label=Array.from(label+" · #"+Number(r.post_id)).slice(0,55).join("");
    buttons.push([{text:label,...(r.title_emoji_id?{icon_custom_emoji_id:String(r.title_emoji_id)}:{}),callback_data:"micro_dossier:"+Number(r.post_id)+":"+safePage}]);
   }
   buttons.push([{text:"📜 بازگشت به فهرست پرونده‌های ثبت‌شده",callback_data:"public_list:1"}]);
