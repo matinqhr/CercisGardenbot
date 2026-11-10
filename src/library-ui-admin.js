@@ -37,6 +37,25 @@ async function openSettings(e,q){
  return out(await tg(e,"editMessageText",{chat_id:q.message.chat.id,message_id:q.message.message_id,text,parse_mode:"HTML",reply_markup:{inline_keyboard:rows}}));
 }
 const esc=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+
+function richTextWithCustomEmojis(message){
+ const raw=String(message?.text??message?.caption??"");
+ const entities=message?.text!=null
+  ?(Array.isArray(message?.entities)?message.entities:[])
+  :(Array.isArray(message?.caption_entities)?message.caption_entities:[]);
+ const ranges=entities
+  .filter(x=>x?.type==="custom_emoji"&&x?.custom_emoji_id!=null)
+  .map(x=>({offset:Number(x.offset),length:Number(x.length),id:String(x.custom_emoji_id)}))
+  .filter(x=>Number.isSafeInteger(x.offset)&&Number.isSafeInteger(x.length)&&x.offset>=0&&x.length>0&&x.offset+x.length<=raw.length&&x.id)
+  .sort((a,b)=>b.offset-a.offset);
+ let html=raw;
+ for(const x of ranges){
+  const glyph=raw.slice(x.offset,x.offset+x.length);
+  if(!glyph)continue;
+  html=html.slice(0,x.offset)+'<tg-emoji emoji-id="'+esc(x.id)+'">'+esc(glyph)+'</tg-emoji>'+html.slice(x.offset+x.length);
+ }
+ return html;
+}
 async function labelMenu(e,q){
  const s=await getLibraryUISettings(e),rows=[];
  for(const key of LIBRARY_UI_LABEL_FIELDS)rows.push([{text:(LABEL_NAMES[key]||key)+": "+String(s[key+"_text"]||"").slice(0,34),callback_data:"libraryui_edit:"+key}]);
@@ -62,7 +81,7 @@ async function beginEdit(e,q,field){
  await e.DB.prepare("INSERT INTO bot_library_ui_sessions(user_id,field,created_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET field=excluded.field,created_at=CURRENT_TIMESTAMP").bind(q.from.id,field).run();
  const rich=field==="hub_text"||field==="tree_text";
  const hint=rich
-  ?"کد Rich HTML را به‌صورت متن بفرست. نمونه: <mark>متن هایلایت‌شده</mark>، <a href='URL'>لینک روی واژه</a>، <h2>تیتر</h2>، <blockquote>نقل‌قول</blockquote> و <details><summary>بیشتر</summary>متن پنهان</details>. شکست‌خط‌هایی که با Enter می‌گذاری هم خودکار حفظ می‌شوند و نیازی به نوشتن <br> برای هر خط نیست. دکمه‌های کتابخانه خودکار زیر محتوا قرار می‌گیرند. برای بازگشت به پیش‌فرض /reset بفرست."
+  ?"کد Rich HTML را به‌صورت متن بفرست. ایموجی‌های Premium را هم مستقیماً از پنل ایموجی تلگرام وارد کن؛ شناسه و نمایش اختصاصی آن‌ها حفظ می‌شود. نمونه: <mark>متن هایلایت‌شده</mark>، <a href='URL'>لینک روی واژه</a>، <h2>تیتر</h2>، <blockquote>نقل‌قول</blockquote> و <details><summary>بیشتر</summary>متن پنهان</details>. شکست‌خط‌هایی که با Enter می‌گذاری هم خودکار حفظ می‌شوند و نیازی به نوشتن <br> برای هر خط نیست. دکمه‌های کتابخانه خودکار زیر محتوا قرار می‌گیرند. برای بازگشت به پیش‌فرض /reset بفرست."
   :"عنوان تازهٔ "+(LABEL_NAMES[field]||"دکمه")+" را بفرست. حداکثر ۶۴ نویسه است؛ برای بازگشت به عنوان پیش‌فرض /reset بفرست.";
  return out(await tg(e,"sendMessage",{chat_id:q.message.chat.id,text:"✏️ "+hint,reply_markup:{force_reply:true,selective:true}}));
 }
@@ -88,8 +107,9 @@ export async function handleLibraryUIMessage(e,m){
   return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"♻️ مقدار به حالت پیش‌فرض برگشت.",reply_markup:{inline_keyboard:[[{text:"🎨 بازگشت به تنظیمات کتابخانه",callback_data:"libraryui_open"}]]}}));
  }
  if(rich){
-  if(new TextEncoder().encode(raw).length>32768)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ Rich Message حداکثر ۳۲٬۷۶۸ بایت UTF-8 است."}));
-  await updateLibraryUISettings(e,{[field]:raw,[field.replace(/_text$/,"_entities")]:[],[field.replace(/_text$/,"_custom")]:true});
+  const richHtml=richTextWithCustomEmojis(m);
+  if(new TextEncoder().encode(richHtml).length>32768)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ Rich Message حداکثر ۳۲٬۷۶۸ بایت UTF-8 است."}));
+  await updateLibraryUISettings(e,{[field]:richHtml,[field.replace(/_text$/,"_entities")]:[],[field.replace(/_text$/,"_custom")]:true});
  }else{
   const label=buttonLabel(m),length=Array.from(label.text).length;
   if(!label.text||length>64)return out(await tg(e,"sendMessage",{chat_id:m.chat.id,text:"❌ عنوان دکمه باید بین ۱ تا ۶۴ نویسه باشد."}));
