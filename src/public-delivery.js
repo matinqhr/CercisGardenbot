@@ -11,7 +11,7 @@ async function findMicroDossier(e,t){
  if(!t?.post_id||norm(t.channel)!==HOME_CHANNEL)return null;
  try{
   const id=Number(t.post_id);
-  const row=await e.DB.prepare("SELECT p.message_id,p.title,p.url,p.status,o.overview,o.photo_file_id,l.lyrics FROM home_archive_posts p LEFT JOIN home_post_overviews o ON o.post_id=p.message_id LEFT JOIN home_post_lyrics l ON l.post_id=p.message_id WHERE p.message_id=? AND COALESCE(p.status,'pending')<>'deleted'").bind(id).first();
+  const row=await e.DB.prepare("SELECT i.post_id AS message_id,p.title,p.url,p.status,o.overview,o.photo_file_id,l.lyrics FROM (SELECT ? AS post_id) i LEFT JOIN home_archive_posts p ON p.message_id=i.post_id LEFT JOIN home_post_overviews o ON o.post_id=i.post_id LEFT JOIN home_post_lyrics l ON l.post_id=i.post_id WHERE COALESCE(p.status,'pending')<>'deleted'").bind(id).first();
   if(!row)return null;
   const hasOverview=Boolean(String(row.overview||"").trim()||String(row.photo_file_id||""));
   const hasLyrics=Boolean(String(row.lyrics||"").trim());
